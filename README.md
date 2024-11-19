@@ -12,7 +12,7 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 
 ### Centos 8 Stream
 ```
-yum install npm
+sudo yum -y install npm
 npm install yarn
 
 cd ui
