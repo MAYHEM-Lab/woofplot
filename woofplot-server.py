@@ -1,4 +1,5 @@
 # woofplot-server.py
+'''
     Author: Chandra Krintz, 
     License: UCSB BSD -- see LICENSE file in this repository
 '''
