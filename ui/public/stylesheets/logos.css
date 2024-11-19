@@ -1,0 +1,48 @@
+.logo-container {
+    max-width: 1450px;
+    max-height: 100px;
+    padding-top: 20px;
+    margin-left: 40px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid lightgray;
+}
+
+.logo {
+    height: 50px;
+}
+
+.logo-primary {
+    height: 60px;
+}
+
+.logo-secondary {
+    float: right;
+    margin-left: 4em;
+}
+
+.contact-info {
+    position: relative;
+    display: grid;
+    float: right;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.contact {
+    font-size: 16px;
+}
+
+
+.contact-header {
+    margin-top: -0.7em;
+    font-weight: bold;
+    text-align: center;
+    font-size: 19px;
+}
+
+.contact-name {
+    margin-right: 1em;
+}
