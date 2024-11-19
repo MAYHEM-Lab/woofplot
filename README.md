@@ -24,4 +24,6 @@ ln -s ui/build .
 ```
 
 # Running WoofPlot
+```
 python3 woofplot-server.py 
+```
