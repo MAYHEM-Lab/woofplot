@@ -13,9 +13,9 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 ### Centos 8 Stream
 ```
 sudo yum -y install npm
-npm install yarn
 
 cd ui
+npm install yarn
 yarn install
 yarn run build		#version 1.22.22
 npx browserslist@latest --update-db
@@ -25,5 +25,6 @@ ln -s ui/build .
 
 # Running WoofPlot
 ```
+cd woofplot
 python3 woofplot-server.py 
 ```
