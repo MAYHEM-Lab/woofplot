@@ -1,0 +1,19 @@
+{
+    "runjobs": false,
+    "cleandb": false,
+    "cleanworkers": false,
+    "cleancols": false,
+    "dumpwoofs": true,
+    "woofurls": [
+        "woof://128.111.45.83/mnt/monitor/cox-home.download",
+        "woof://128.111.45.83/mnt/monitor/pizero-05.dht"
+    ],
+    "woofs_to_delete_completely": [],
+    "woofid": -1,
+    "field": -1,
+    "start": -1,
+    "end": -1,
+    "agg": "average",
+    "intv": "minute",
+    "DEBUG": true
+}

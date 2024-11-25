@@ -1,0 +1,6 @@
+
+JWT_SECRET="ooo lala sassoon"
+WPPORT=8080
+WPDEBUG=True
+SQLALCHEMY_DATABASE_URI="postgresql://XXX:YYY@localhost:5432/woofplot"
+DATABASE="woofplot"
