@@ -50,6 +50,7 @@ def getwoofs():
     ############  GET   ##############
     if request.method == 'GET':
         try:
+            #this spawns jobs in background to load each woof's latest
             responses = utils.get_all_woofs_from_db()
         except Exception as e :
             return jsonify({"WOOFPLOT": f"/api/woof/ GET get_all_woofs_from_db error {e}"}),500
@@ -72,28 +73,26 @@ def getwoofs():
         #columns is a list; columns and name get updated if values are different
         utils.add_or_update_woof_in_db(data,seqno)
 
-        #spawn job in background to load the woof
+        #spawn job in background to load the woof -- do the full JOB_LIMIT since user is working on adding columns
         if DEBUG:
             print(f'calling run_jobs from /apt/woof POST for {data["url"]}')
-        utils.run_jobs(url)
+        utils.run_jobs(data["url"], seqno)
+
         return jsonify({}), 201
     return jsonify({f"WOOFPLOT": "/api/woof/ unknown method error {request.method}"}), 405
 
 @app.route('/api/woof/<int:woof_id>', methods=['PUT', 'DELETE'])
 def updatewoofs(woof_id):
     ######## DELETE ###########
-    if request.method == 'DELETE':
+    if request.method == 'DELETE': #delete the columns from the woof in the db
         utils.delete_woof_from_db(woof_id)
         return jsonify({}), 204
     ######## PUT ###########
-    try:
+    try: #updating columns for an existing woof
         data = json.loads(request.data)
     except ValueError:
         return jsonify({"WOOFPLOT": "/api/woof/ PUT JSON load error"}),405
     utils.add_or_update_woof_in_db(data)
-    if DEBUG:
-        print(f'calling run_jobs from /apt/woof PUT for {data["url"]}')
-    utils.run_jobs(data["url"])
     return jsonify({}), 204
 
 

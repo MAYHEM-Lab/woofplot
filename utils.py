@@ -19,7 +19,8 @@ import cspot_utils
 import tasks
 from redis import Redis
 from redis_config import queue
-JOB_LIMIT = 100
+JOB_LIMIT = 250
+SMALL_JOB = 20
 
 DEBUG = os.environ.get("WPDEBUG")
 secsmap = {
@@ -59,10 +60,13 @@ def get_woof_values(woofId,field,s,e,agg,interval): #between millisecond timesta
                 WoofData.ts <= enddt
             )
         ).order_by(func.random()).limit(count_to_return).all()
-        if len(rand_rows) == 0:
+        retn_len = len(rand_rows)
+        if retn_len == 0:
             #no results
-            retn = {f"WOOFPLOT": "get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
+            retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
             return retn,500
+        if retn_len < count_to_return:
+            run_jobs(woofId,count_to_return) #calls load_woof on earliest seqno and loads count_to_return eles
 
         #sort results
         results = sorted(rand_rows, key=lambda x: x.ts)
@@ -332,7 +336,7 @@ def get_all_woofs_from_db():
     for woof in woofs:
         #spawn job in background to load a small number of latest entries for each woof to prime the pump
         if DEBUG:
-            print(f'calling run_jobs from get_all_woofs_from_db for {woof.id}:{url}')
+            print(f'calling run_jobs from get_all_woofs_from_db for {woof.id}:{woof.url}')
         run_jobs(woof.id,-1)
         woof_data = {
             'woofId': woof.id,
@@ -356,8 +360,8 @@ def add_users_in_list_to_db(ulist):
         add_user_to_db(tpl[0],tpl[1],tpl[2])
 
 ################
-def run_jobs(woofurl):
-    wid = get_woof_id_from_url(woofurl)
+def run_jobs(woofurl,limit=JOB_LIMIT):
+    wid = get_woof_id_from_url(woofurl,limit)
     run_jobs(wid)
 
 ################
@@ -369,12 +373,17 @@ def run_jobs(woofId,limit=JOB_LIMIT):
             print(f"run_jobs: running background jobs for {woofurl}, limit: {limit}")
         #if limit == -1, get the most recent entries
         if limit == -1: #just call load_woof which loads a small number of the most recent entries
-            job1 = queue.enqueue(tasks.woof_load_task, woofurl, -1, 72)
+            job1 = queue.enqueue(tasks.woof_load_task, woofurl, -1, SMALL_JOB) #calls load_woof(woofurl,-1,SMALL_JOB)
         else:
             earliest_seqno = get_earliest_seqno_from_woofId(woofId)
-            job1 = queue.enqueue(tasks.woof_load_task, woofurl, earliest_seqno, limit)
-        if DEBUG:
-            print(f"{job1}")
+            if limit > JOB_LIMIT:
+                lim = limit
+                while lim > 0: #run multiple jobs with different earliest_seqnos
+                    queue.enqueue(tasks.woof_load_task, woofurl, earliest_seqno, JOB_LIMIT) 
+                    earliest_seqno = earliest_seqno - JOB_LIMIT
+                    lim = lim - JOB_LIMIT
+            else:
+                job1 = queue.enqueue(tasks.woof_load_task, woofurl, earliest_seqno, limit) #calls load_woof(woofurl,esno,limit)
     except Exception as e:
         print(f"Exception in run_jobs: {e}")
 
@@ -393,7 +402,7 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
     if DEBUG:
         print(f"load_woof: {woofurl}, {endsn}, {count}: {latest}")
     retn = None #return the ts, seqno, data for last cspot entry loaded
-    if latest == -1: #new woof: add the latest and work back through count
+    if endsn == -1: #get the woof latest and work back
         res,OK = cspot_get(woofurl)
         if not OK:
             print(f'load_woof [latest]: cspot call failed {woofurl} trying again...')
@@ -405,7 +414,12 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
                 print(f'load_woof [latest]: 2nd try cspot call failed {woofurl} failed')
                 print(f"WOOFPLOT: latest load_woof error: cspot call failed")
                 return None
-        woof.latest_seq_no = endsn = int(res[5])
+        endsn = int(res[5])
+        if latest == -1: #new woof, just back up count and load it to wooflatest
+            startsn = int(endsn - count)
+        else: #existing woof, load from db latest to wooflatest
+            startsn = int(latest)
+        woof.latest_seq_no = endsn #update the database to match wooflatest which we are about to add
         if DEBUG:
             print(f"getting latest, got seqno: {endsn}")
         ts_exists = db_session.query(WoofData).filter(WoofData.seqno == endsn, WoofData.woof_id == woof.id).first()
@@ -424,14 +438,13 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
             db_session.add(woofdata)
             db_session.commit()
         else:
-            retn = (ts_exists.ts,endsn,ts_exists.data) #store off the latest
+            retn = (ts_exists.ts,endsn,ts_exists.data) #return the latest
+            return retn #ts, seqno, data for the last entry in the DB
+    else: #endsn was passed in, get the startsn
+        assert latest != -1
+        startsn = int(endsn-count)
 
-    else: #latest != -1 ie this is not a new woof, latest holds it lastest_seq_no in the db
-        if endsn == -1:  #case 2 -- get count entries less than latest
-            endsn = latest
-        #case 3 (else) - get count entries less than endsn passed in
-
-    startsn = endsn-count
+    #load the missing data into the database from the woof
     for seqno in range(startsn, endsn):
         #check if we already did this and skip if so
         ts_exists = db_session.query(WoofData).filter(WoofData.seqno == seqno, WoofData.woof_id == woof.id).first()
@@ -464,7 +477,7 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
         if seqno == endsn-1: #save off the last one
             retn = (ts,seqno,res[0]) 
         
-    return retn #ts, seqno, data for the last loaded
+    return retn #ts, seqno, data for the last entry in the DB (only used for debugging)
 
 ###############################
 def main():

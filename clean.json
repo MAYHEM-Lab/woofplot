@@ -1,0 +1,16 @@
+{
+    "runjobs": false,
+    "cleandb": true,
+    "cleanworkers": true,
+    "cleancols": false,
+    "dumpwoofs": false,
+    "woofurls": [],
+    "woofs_to_delete_completely": [],
+    "woofid": -1,
+    "field": -1,
+    "start": -1,
+    "end": -1,
+    "agg": "average",
+    "intv": "minute",
+    "DEBUG": true
+}
