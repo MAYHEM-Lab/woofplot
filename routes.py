@@ -12,6 +12,8 @@ from flask import request, jsonify, g
 from db import db_session
 import utils 
 from flask_jwt_extended import create_access_token, create_refresh_token, current_user, jwt_required   
+from redis_config import queue
+from tasks import woof_load_task
 
 '''
 flask automatically redirects routes without a final slash (/) to one with a final slash 
@@ -54,6 +56,8 @@ def getwoofs():
         return jsonify(responses), 200
     ############  POST ##############
     else:
+        #create a db record for a woof the first time 
+        #reuse an old record (same url) if available
         try:
             data = json.loads(request.data)
         except ValueError:
@@ -61,8 +65,17 @@ def getwoofs():
         res,OK = utils.cspot_get(data["url"])
         if not OK:
             return jsonify(res),500
+        #seqno must be a valid sequence number when creating a woof record for the first time
         seqno = int(res[5])
+
+        #data is a dict with keys url, name, columns       #url is unique in DB  
+        #columns is a list; columns and name get updated if values are different
         utils.add_or_update_woof_in_db(data,seqno)
+
+        #spawn job in background to load the woof
+        if DEBUG:
+            print(f'calling run_jobs from /apt/woof POST for {data["url"]}')
+        utils.run_jobs(url)
         return jsonify({}), 201
     return jsonify({f"WOOFPLOT": "/api/woof/ unknown method error {request.method}"}), 405
 
@@ -78,6 +91,9 @@ def updatewoofs(woof_id):
     except ValueError:
         return jsonify({"WOOFPLOT": "/api/woof/ PUT JSON load error"}),405
     utils.add_or_update_woof_in_db(data)
+    if DEBUG:
+        print(f'calling run_jobs from /apt/woof PUT for {data["url"]}')
+    utils.run_jobs(data["url"])
     return jsonify({}), 204
 
 
@@ -89,7 +105,8 @@ def query():
     end = request.args.get('to')
     agg = request.args.get('aggregation')
     interval = request.args.get('interval')
-    return utils.get_woof_values(woofId,int(field),int(start),int(end),agg,interval)
+    retn,status = utils.get_woof_values(woofId,int(field),int(start),int(end),agg,interval)
+    return jsonify(retn), status
 
 @app.route('/api/login/', methods=['POST']) 
 def setuplogin(): 
@@ -150,6 +167,16 @@ def changepwd():
 def logout(): 
     g.user =  None #global current user without requiring a jwt token
     return jsonify({"WOOFPLOT": "User logged out"}), 200
+
+@app.route('/api/retention/<int:weeks>', methods=['POST']) 
+def update_retention(weeks): 
+    set_state('retention',weeks)
+    return jsonify({"WOOFPLOT": f"retention policy set to {weeks} weeks"}), 200
+    
+@app.route('/api/retention/', methods=['GET']) 
+def retention(): 
+    weeks = get_state('retention')
+    return jsonify({weeks}), 200
 
 # Set the base route to be the react index.html
 @app.route('/')
