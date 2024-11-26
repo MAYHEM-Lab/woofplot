@@ -61,12 +61,12 @@ def get_woof_values(woofId,field,s,e,agg,interval): #between millisecond timesta
             )
         ).order_by(func.random()).limit(count_to_return).all()
         retn_len = len(rand_rows)
+        if retn_len < count_to_return:
+            run_jobs(woofId,count_to_return) #calls load_woof on earliest seqno and loads count_to_return eles
         if retn_len == 0:
             #no results
             retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
             return retn,500
-        if retn_len < count_to_return:
-            run_jobs(woofId,count_to_return) #calls load_woof on earliest seqno and loads count_to_return eles
 
         #sort results
         results = sorted(rand_rows, key=lambda x: x.ts)
@@ -110,7 +110,7 @@ def get_woof_values(woofId,field,s,e,agg,interval): #between millisecond timesta
             else:
                 tmpv = latest.data.split(':')
                 assert len(tmpv) > field
-                response['value'] = tempv[field]
+                response['value'] = tmpv[field]
             responses.append(response)
     except Exception as e:
         print(f"Exception in get_woof_values: {e}")
@@ -399,8 +399,7 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
     #   seqno range 
     woof = get_woof_from_db(woofurl) #adds it if not there
     latest = woof.latest_seq_no
-    if DEBUG:
-        print(f"load_woof: {woofurl}, {endsn}, {count}: {latest}")
+    print(f"load_woof: {woofurl}, {endsn}, {count}: {latest}")
     retn = None #return the ts, seqno, data for last cspot entry loaded
     if endsn == -1: #get the woof latest and work back
         res,OK = cspot_get(woofurl)
@@ -414,39 +413,44 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
                 print(f'load_woof [latest]: 2nd try cspot call failed {woofurl} failed')
                 print(f"WOOFPLOT: latest load_woof error: cspot call failed")
                 return None
+
+        #set startsn and endsn for loading range
         endsn = int(res[5])
         if latest == -1: #new woof, just back up count and load it to wooflatest
             startsn = int(endsn - count)
         else: #existing woof, load from db latest to wooflatest
             startsn = int(latest)
         woof.latest_seq_no = endsn #update the database to match wooflatest which we are about to add
-        if DEBUG:
-            print(f"getting latest, got seqno: {endsn}")
-        ts_exists = db_session.query(WoofData).filter(WoofData.seqno == endsn, WoofData.woof_id == woof.id).first()
-        if not ts_exists:
-            epoch = float(res[2])
-            ts = datetime.fromtimestamp(epoch)
-            if DEBUG:
-                print(f'adding latest woofdata {ts}:{endsn}:{res[0]}')
-            woofdata = WoofData(
-                ts = ts,
-                seqno = endsn,
-                data = res[0],
-                woof=woof 
-            )
-            retn = (ts,endsn,res[0]) #store off the latest
-            db_session.add(woofdata)
-            db_session.commit()
-        else:
-            retn = (ts_exists.ts,endsn,ts_exists.data) #return the latest
+        db_session.commit() #commit right away in case there is a race to add data for some reason
+        print(f"\tload_woof: updated endsn {endsn} startsn {startsn} woof-latest {endsn}")
+        epoch = float(res[2])
+        ts = datetime.fromtimestamp(epoch)
+        retn = (ts,endsn,res[0]) #return the latest
+        if endsn == startsn:
             return retn #ts, seqno, data for the last entry in the DB
-    else: #endsn was passed in, get the startsn
+
+        #add the latest woof to the db, its not there if we reached here
+        if DEBUG:
+            print(f'adding latest woofdata {ts}:{endsn}:{res[0]}')
+        woofdata = WoofData(
+            ts = ts,
+            seqno = endsn,
+            data = res[0],
+            woof=woof 
+        )
+        print(f"\tload_woof: adding seqno {endsn}")
+        db_session.add(woofdata)
+        db_session.commit()
+
+    else: #valid endsn was passed in, get the startsn
         assert latest != -1
         startsn = int(endsn-count)
+        print(f"\tload_woof: setting startsn {startsn} given endsn {endsn}")
 
     #load the missing data into the database from the woof
+    print(f"\tload_woof: loading missing data from startsn {startsn} to endsn {endsn}")
     for seqno in range(startsn, endsn):
-        #check if we already did this and skip if so
+        #check if its already in the db, and skip if so
         ts_exists = db_session.query(WoofData).filter(WoofData.seqno == seqno, WoofData.woof_id == woof.id).first()
         if ts_exists:
             if seqno == endsn-1: #save off the last one
@@ -477,6 +481,7 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
         if seqno == endsn-1: #save off the last one
             retn = (ts,seqno,res[0]) 
         
+    print(f"\tload_woof: done with woof {woofurl}")
     return retn #ts, seqno, data for the last entry in the DB (only used for debugging)
 
 ###############################
