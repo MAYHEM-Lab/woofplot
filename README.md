@@ -6,7 +6,7 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 ## Requirements
 * [python3 as python](https://www.python.org/downloads/)
 * [yarn](https://classic.yarnpkg.com/en/docs/install)
-* [PostgreSQL](https://www.postgresql.org)
+* [PostgreSQL](https://www.postgresql.org); [Configuration and Setup] (https://www.digitalocean.com/community/tutorials/how-to-install-and-use-postgresql-on-centos-8)
 * [redis and python rq](https://python-rq.org)
 
 ## Installation
@@ -14,11 +14,18 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 
 ### Centos 8 Stream
 ```
-yum install -y python3-devel redis npm yarn postgresql postgresql-server postgresql-contrib postgresql-devel logrotate
-#configure your postgresql database to have username and password -- you will add these to your .env file
+sudo yum install -y python3-devel redis npm  postgresql postgresql-server postgresql-contrib postgresql-devel logrotate
+cd woofplot
 npm install yarn
 pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq
 
+#Next: configure your postgresql database to have username and password -- you will add these to your .env file
+#This link (a clickable version is above withpostgreSQL config) explains how: https://www.digitalocean.com/community/tutorials/how-to-install-and-use-postgresql-on-centos-8
+
+cp env .env
+#edit .env to replace XXX and YYY with your postgresql username and password, respectively.
+
+#Next: build the UI
 cd ui
 yarn install
 yarn run build		#version 1.22.22
