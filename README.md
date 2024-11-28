@@ -54,7 +54,7 @@ rq worker default > ./logs/woofplot-worker2.log 2>&1 &
 #edit file .env (use env as an example, replace XXX and YYY with your postgresql username and password)
 python woofplot-server.py 
 ```
-* Navigate to http://IPADDRESS:8111 (you can change the port in .env and restart the woofplot server)
+* Navigate to http://YOUR_IPADDRESS:8111 (you can change the port in .env and restart the woofplot server)
 
 # Terminating WoofPlot
 ```
