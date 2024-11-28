@@ -23,6 +23,7 @@ sudo yum groupinstall "Development Tools" -y
 sudo npm install --global yarn
 sudo update-alternatives --config python   #choose python3.11 and verify its the default with python -V
 python3.11 -m ensurepip
+python3.11 -m pip install --upgrade pip
 python3.11 -m pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2 sqlalchemy_orm python-dotenv requests
 
 # Next: Configure your postgresql database. Links for configuration/setup are above. 
