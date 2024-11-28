@@ -6,7 +6,9 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 ## Requirements
 * [python3 as python](https://www.python.org/downloads/)
 * [yarn](https://classic.yarnpkg.com/en/docs/install)
-* [PostgreSQL](https://www.postgresql.org); [Configuration and Setup (Centos 8)](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-postgresql-on-centos-8)
+* [PostgreSQL](https://www.postgresql.org)
+* * [Configuration and Setup (Centos)](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-postgresql-on-centos-8)
+  * [Configuration and Setup (Ubuntu)](https://www.digitalocean.com/community/tutorials/how-to-install-postgresql-on-ubuntu-20-04-quickstart)
 * [redis and python rq](https://python-rq.org)
 
 ## Installation
