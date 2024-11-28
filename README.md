@@ -21,8 +21,8 @@ cd woofplot
 npm install yarn
 pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq
 
-#Next: configure your postgresql database to have username and password -- you will add these to your .env file
-#This link (a clickable version is above withpostgreSQL config) explains how: https://www.digitalocean.com/community/tutorials/how-to-install-and-use-postgresql-on-centos-8
+# Next: Configure your postgresql database. Links for configuration/setup are above. 
+# Add a username and password for your default user (i.e. centos, ubuntu, cloud-user).  You will add these to your .env file below.
 
 cp env .env
 #edit .env to replace XXX and YYY with your postgresql username and password, respectively.
