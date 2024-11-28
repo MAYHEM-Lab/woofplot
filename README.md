@@ -38,7 +38,7 @@ cp env .env
 # Next: build the UI
 cd ui
 yarn install
-yarn run build
+yarn run build  #rerun this if/when you change the UI files
 cd ..
 ln -s ui/build .
 ```
