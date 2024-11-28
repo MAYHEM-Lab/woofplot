@@ -16,6 +16,7 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 
 ### Centos 8 Stream
 ```
+#ensure you do not have a firewall blocking port 8000-9000.  Turn off via: systemctl stop firewalld
 sudo yum install -y python3.11 python3.11-devel redis npm  postgresql postgresql-server postgresql-contrib postgresql-devel logrotate
 sudo yum groupinstall "Development Tools" -y
 sudo npm install --global yarn
