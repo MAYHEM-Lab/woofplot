@@ -22,8 +22,9 @@ npm install yarn
 pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq
 
 # Next: Configure your postgresql database. Links for configuration/setup are above. 
-# Add a username and password for your default user (i.e. centos, ubuntu, cloud-user).
-# You will add these to your .env file below.
+# Add a superuser with username and password for your default login (i.e. centos, ubuntu, cloud-user).
+# You will add the username and password to your .env file below.
+sudo -u postgres createuser --interactive
 
 cp env .env
 #edit .env to replace XXX and YYY with your postgresql username and password, respectively.
