@@ -14,7 +14,16 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 ## Installation
 ```git clone git@github.com:MAYHEM-Lab/woofplot.git```
 
-### Centos 8 Stream
+### Ubuntu 22.04 Configuration
+```
+sudo apt update; sudo apt -y upgrade; sudo apt -y autoremove
+sudo apt install -y python3 python-is-python3 python3-dev redis npm postgresql logrotate build-essential libpq-dev postgresql-contrib
+sudo npm install --global yarn
+python -m pip install --upgrade pip
+python -m pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2 sqlalchemy_orm python-dotenv requests
+export PATH=${PATH}:/home/ubuntu/.local/bin   #place this in ~/.bashrc also
+```
+### Centos 8 Stream Configuration
 ```
 #ensure you do not have a firewall blocking port 8000-9000.  Turn off via: systemctl stop firewalld
 sudo yum -y update
@@ -26,14 +35,30 @@ python3.11 -m ensurepip
 python3.11 -m pip install --upgrade pip
 python3.11 -m pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2 sqlalchemy_orm python-dotenv requests
 
-# Next: Configure your postgresql database. Links for configuration/setup are above. 
-# Add a superuser with username and password for your default login (i.e. centos, ubuntu, cloud-user).
+### Building Woofplot
+```
+# Configure your postgresql database. Links for configuration/setup are above. 
 # You will add the username and password to your .env file below.
+
+# Add a superuser with the username for your default login (i.e. centos, ubuntu, cloud-user). 
 sudo -u postgres createuser --interactive
+
+# Using the psql command, add a password for the user you just added (change XXX and YYY in the ALTER psql command):
+psql postgres
+postgres=# ALTER USER XXX WITH PASSWORD 'YYY';
+postgres=# \q
+createdb wooplot
 
 cd woofplot
 cp env .env
-# Next: edit .env to replace XXX and YYY with your postgresql username and password, respectively.
+# Next: edit .env to replace XXX and YYY with your postgresql username and password, respectively.  Also change the string in JWT_SECRET so that your own secrets are generated correctly and securely.
+
+# Create an admin user in a file called woofplot seed with these contents (change YYY to a strong password of your choosing):
+users_list = [
+    ('admin','XXX',True),
+]
+# Run the db script to setup the woofplot tables. Note that this deletes any tables/data that you have put in the woofplot database from earlier runs.
+python db.py -c
 
 # Next: build the UI
 cd ui
@@ -49,7 +74,7 @@ cd woofplot
 mkdir -p logs
 
 # First check that redis-server is running (ps auxww |grep redis-server), if not start it with this:
-redis-server --daemonize yes --logfile ./logs/woofplot-redis.log &
+redis-server --daemonize yes --logfile ./logs/woofplot-redis.log
 
 rq worker default > ./logs/woofplot-worker1.log 2>&1 &
 rq worker default > ./logs/woofplot-worker2.log 2>&1 &
