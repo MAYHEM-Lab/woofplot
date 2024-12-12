@@ -10,9 +10,13 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 * * [Configuration and Setup (Centos)](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-postgresql-on-centos-8)
   * [Configuration and Setup (Ubuntu)](https://www.digitalocean.com/community/tutorials/how-to-install-postgresql-on-ubuntu-20-04-quickstart)
 * [redis and python rq](https://python-rq.org)
+* [CSPOT](https://github.com/MAYHEM-Lab/cspot)
 
 ## Installation
-```git clone git@github.com:MAYHEM-Lab/woofplot.git```
+```
+#install cspot first (using the link above).
+git clone git@github.com:MAYHEM-Lab/woofplot.git
+```
 
 ### Ubuntu 22.04 Configuration
 ```
@@ -25,7 +29,8 @@ export PATH=${PATH}:/home/ubuntu/.local/bin   #place this in ~/.bashrc also
 ```
 ### Centos 8 Stream Configuration
 ```
-#ensure you do not have a firewall blocking port 8000-9000.  Turn off via: systemctl stop firewalld
+# Ensure you do not have a firewall blocking port 8000-9000.  
+# Turn off via: systemctl stop firewalld
 sudo yum -y update
 sudo yum install -y python3.11 python3.11-devel redis npm  postgresql postgresql-server postgresql-contrib postgresql-devel logrotate
 sudo yum groupinstall "Development Tools" -y
@@ -34,6 +39,7 @@ sudo update-alternatives --config python   #choose python3.11 and verify its the
 python3.11 -m ensurepip
 python3.11 -m pip install --upgrade pip
 python3.11 -m pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2 sqlalchemy_orm python-dotenv requests
+```
 
 ### Building Woofplot
 ```
