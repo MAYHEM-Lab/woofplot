@@ -20,6 +20,8 @@ git clone git@github.com:MAYHEM-Lab/woofplot.git
 
 ### Ubuntu 22.04 Configuration
 ```
+# Ensure you do not have a firewall blocking port 8111.
+# Turn off the firewall (to test) via: sudo ufw disable
 sudo apt update; sudo apt -y upgrade; sudo apt -y autoremove
 sudo apt install -y python3 python-is-python3 python3-dev redis npm postgresql logrotate build-essential libpq-dev postgresql-contrib
 sudo npm install --global yarn
@@ -29,8 +31,8 @@ export PATH=${PATH}:/home/ubuntu/.local/bin   #place this in ~/.bashrc also
 ```
 ### Centos 8 Stream Configuration
 ```
-# Ensure you do not have a firewall blocking port 8000-9000.  
-# Turn off via: systemctl stop firewalld
+# Ensure you do not have a firewall blocking port 8111.
+# Turn off the firewall (to test) via: systemctl stop firewalld
 sudo yum -y update
 sudo yum install -y python3.11 python3.11-devel redis npm  postgresql postgresql-server postgresql-contrib postgresql-devel logrotate
 sudo yum groupinstall "Development Tools" -y
@@ -91,7 +93,6 @@ python woofplot-server.py
 * Navigate to http://YOUR_IPADDRESS:8111 (you can change the port in .env and restart the woofplot server)
 
 # Terminating WoofPlot
-```
-press Ctrl-C on woofplot-server.py
-use kill -9 to kill the process IDs for redis-server and rq worker
+* Press Ctrl-C on woofplot-server.py
+* Use ```kill -9 XXX``` to kill the process IDs (XXX) for redis-server and rq worker
 ```
