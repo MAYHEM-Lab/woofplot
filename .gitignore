@@ -4,3 +4,4 @@ woofplot_seed.py
 .env
 __pycache__
 woofplotenv
+logs

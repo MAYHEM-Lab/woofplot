@@ -1,6 +1,6 @@
 
 JWT_SECRET="ooo lala sassoon"
 WPPORT=8111
-WPDEBUG=True
+WPDEBUG="false"
 SQLALCHEMY_DATABASE_URI="postgresql://XXX:YYY@localhost:5432/woofplot"
 DATABASE="woofplot"

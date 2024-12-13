@@ -26,7 +26,11 @@ if __name__ == '__main__':
     with app.app_context():
         dotenv.load_dotenv()
         jwt_secret = os.environ.get("JWT_SECRET")
-        DEBUG = os.environ.get("WPDEBUG")
+        tmp = os.environ.get("WPDEBUG")
+        if tmp.lower() in ['true', '1']:
+            DEBUG = True
+        else: 
+            DEBUG = False
         dburi = os.environ.get("SQLALCHEMY_DATABASE_URI")
         dbname = os.environ.get("database")
     port = os.environ.get("WPPORT")
