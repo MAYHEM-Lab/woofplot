@@ -33,7 +33,6 @@ export PATH=${PATH}:/home/ubuntu/.local/bin   #place this in ~/.bashrc also
 sudo yum -y update
 sudo yum install -y python3.11 python3.11-devel redis npm  postgresql postgresql-server postgresql-contrib postgresql-devel logrotate
 sudo yum groupinstall "Development Tools" -y
-sudo npm install --global yarn
 sudo update-alternatives --config python   #choose python3.11 and verify its the default with python -V
 python -m ensurepip
 python -m pip install --upgrade pip
@@ -57,7 +56,7 @@ sudo npm install --global yarn
 python -m venv woofplotenv
 source woofplotenv/bin/activate
 pip install --upgrade pip
-pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors sqlalchemy_orm python-dotenv requests
+pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2-binary sqlalchemy_orm python-dotenv requests
 deactivate
 
 ```
@@ -78,6 +77,12 @@ python db.py -c
 
 # Next: build the UI
 cd ui
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" 
+nvm install node
+nvm install 16
 yarn install
 yarn run build  #rerun this if/when you change the UI files
 cd ..
