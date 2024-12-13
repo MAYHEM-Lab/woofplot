@@ -11,7 +11,7 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
   * [Configuration and Setup (Ubuntu)](https://www.digitalocean.com/community/tutorials/how-to-install-postgresql-on-ubuntu-20-04-quickstart)
 * [redis and python rq](https://python-rq.org)
 * [CSPOT](https://github.com/MAYHEM-Lab/cspot) -- you need only install the CSPOT tools (not docker), e.g. you can use install-ubuntu-nodocker.sh for Ubuntu distros.
-* WoofPlot can also be built in a docker container for Ubuntu using the steps below.  You can download a working container here.
+* WoofPlot can also be built in a docker container for Ubuntu using the steps below.  You can download a working container here. Start the container, then run the Setup and Running steps below.
 
 ## Installation
 ```
@@ -62,7 +62,22 @@ deactivate
 
 ```
 
-### Building Woofplot
+### Building the Woofplot UI
+```
+cd woofplot/ui
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" 
+nvm install node
+nvm install 16
+yarn install
+yarn run build  #rerun this if/when you change the UI files
+cd ..
+ln -s ui/build .
+```
+
+### Setup WoofPlot (Configuring the DB and Environment)
 ```
 cd woofplot
 cp env .env
@@ -76,19 +91,6 @@ users_list = [
 source woofplotenv/bin/activate
 python db.py -c
 deactivate
-
-# Next: build the UI
-cd ui
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
-export NVM_DIR="$HOME/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion" 
-nvm install node
-nvm install 16
-yarn install
-yarn run build  #rerun this if/when you change the UI files
-cd ..
-ln -s ui/build .
 ```
 
 # Running WoofPlot
