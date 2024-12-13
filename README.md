@@ -64,7 +64,6 @@ deactivate
 ### Building Woofplot
 ```
 cd woofplot
-source woofplotenv/bin/activate
 cp env .env
 # Next: edit .env to replace XXX and YYY with your postgresql username and password, respectively.  Also change the string in JWT_SECRET so that your own secrets are generated correctly and securely.
 
@@ -73,7 +72,9 @@ users_list = [
     ('admin','YYY',True),
 ]
 # Run the db script to setup the woofplot tables. Note that this deletes any tables/data that you have put in the woofplot database from earlier runs.
+source woofplotenv/bin/activate
 python db.py -c
+deactivate
 
 # Next: build the UI
 cd ui
@@ -101,6 +102,7 @@ rq worker default > ./logs/woofplot-worker1.log 2>&1 &
 rq worker default > ./logs/woofplot-worker2.log 2>&1 &
 
 #edit file .env (use env as an example, replace XXX and YYY with your postgresql username and password)
+source woofplotenv/bin/activate
 python woofplot-server.py 
 ```
 * Navigate to http://YOUR_IPADDRESS:8111 (you can change the port in .env and restart the woofplot server)
@@ -108,4 +110,5 @@ python woofplot-server.py
 # Terminating WoofPlot
 * Press Ctrl-C on woofplot-server.py
 * Use ```kill -9 XXX``` to kill the process IDs (XXX) for redis-server and rq worker
+* Use ```deactivate``` to exit the python virtual environment
 ```

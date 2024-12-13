@@ -72,8 +72,8 @@ def cspot_send(data,woof,senspot_dir=CSPOT_DIR,wprefix=WOOF_PREFIX_DEF,datatype=
         else:
             cmdlistput = [cspotcmd, '-W', wf, "-T", "d"]
     else: #sending string
-        ds = "{}\c".format(data)
-        cmdlistecho = ['/bin/echo', "-e", ds]
+        ds = "{}".format(data)
+        cmdlistecho = ['/bin/echo', "-en", ds]
         if forward:
             cmdlistput = [cspotcmd, '-W', wf, "-T", "S", "-H", "senspot_forward"]
         else:
