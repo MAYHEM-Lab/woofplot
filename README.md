@@ -21,12 +21,9 @@ git clone git@github.com:MAYHEM-Lab/woofplot.git
 ### Ubuntu 22.04 Configuration
 ```
 # Ensure you do not have a firewall blocking port 8111.
-# Turn off the firewall (to test) via: sudo ufw disable
+# Open port 8111 if you are running a firewall via: sudo ufw allow 8111/tcp
 sudo apt update; sudo apt -y upgrade; sudo apt -y autoremove
-sudo apt install -y python3 python-is-python3 python3-dev redis npm postgresql logrotate build-essential libpq-dev postgresql-contrib
-sudo npm install --global yarn
-python -m pip install --upgrade pip
-python -m pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2 sqlalchemy_orm python-dotenv requests
+sudo apt install -y python3 python-is-python3 python3-dev redis npm postgresql logrotate build-essential libpq-dev postgresql-contrib python3-virtualenv
 export PATH=${PATH}:/home/ubuntu/.local/bin   #place this in ~/.bashrc also
 ```
 ### Centos 8 Stream Configuration
@@ -38,16 +35,13 @@ sudo yum install -y python3.11 python3.11-devel redis npm  postgresql postgresql
 sudo yum groupinstall "Development Tools" -y
 sudo npm install --global yarn
 sudo update-alternatives --config python   #choose python3.11 and verify its the default with python -V
-python3.11 -m ensurepip
-python3.11 -m pip install --upgrade pip
-python3.11 -m pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2 sqlalchemy_orm python-dotenv requests
+python -m ensurepip
+python -m pip install --upgrade pip
 ```
-
-### Building Woofplot
+### Remaining Configuration (regardless of distro)
 ```
 # Configure your postgresql database. Links for configuration/setup are above. 
 # You will add the username and password to your .env file below.
-
 # Add a superuser with the username for your default login (i.e. centos, ubuntu, cloud-user). 
 sudo -u postgres createuser --interactive
 
@@ -55,15 +49,29 @@ sudo -u postgres createuser --interactive
 psql postgres
 postgres=# ALTER USER XXX WITH PASSWORD 'YYY';
 postgres=# \q
-createdb wooplot
+createdb woofplot
 
 cd woofplot
+sudo npm install --global yarn
+
+python -m venv woofplotenv
+source woofplotenv/bin/activate
+pip install --upgrade pip
+pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors sqlalchemy_orm python-dotenv requests
+deactivate
+
+```
+
+### Building Woofplot
+```
+cd woofplot
+source woofplotenv/bin/activate
 cp env .env
 # Next: edit .env to replace XXX and YYY with your postgresql username and password, respectively.  Also change the string in JWT_SECRET so that your own secrets are generated correctly and securely.
 
-# Create an admin user in a file called woofplot seed with these contents (change YYY to a strong password of your choosing):
+# Create an admin user in a file called woofplot_seed.py with these contents (change YYY to a strong password of your choosing):
 users_list = [
-    ('admin','XXX',True),
+    ('admin','YYY',True),
 ]
 # Run the db script to setup the woofplot tables. Note that this deletes any tables/data that you have put in the woofplot database from earlier runs.
 python db.py -c
