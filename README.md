@@ -10,7 +10,7 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 * * [Configuration and Setup (Centos)](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-postgresql-on-centos-8)
   * [Configuration and Setup (Ubuntu)](https://www.digitalocean.com/community/tutorials/how-to-install-postgresql-on-ubuntu-20-04-quickstart)
 * [redis and python rq](https://python-rq.org)
-* [CSPOT](https://github.com/MAYHEM-Lab/cspot)
+* [CSPOT](https://github.com/MAYHEM-Lab/cspot) -- you need only install the CSPOT tools (not docker), e.g. you can use install-ubuntu-nodocker.sh for Ubuntu distros.
 
 ## Installation
 ```
