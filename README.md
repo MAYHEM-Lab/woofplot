@@ -38,21 +38,9 @@ sudo update-alternatives --config python   #choose python3.11 and verify its the
 python -m ensurepip
 python -m pip install --upgrade pip
 ```
-### Remaining Configuration (regardless of distro)
+### Building WoofPlot (regardless of distro)
 ```
-# Configure your postgresql database. Links for configuration/setup are above. 
-# You will add the username and password to your .env file below.
-# Add a superuser with the username for your default login (i.e. centos, ubuntu, cloud-user). 
-sudo -u postgres createuser --interactive
-
-# Using the psql command, add a password for the user you just added (change XXX and YYY in the ALTER psql command):
-psql postgres
-postgres=# ALTER USER XXX WITH PASSWORD 'YYY';
-postgres=# \q
-createdb woofplot
-
 cd woofplot
-sudo npm install --global yarn
 
 python -m venv woofplotenv
 source woofplotenv/bin/activate
@@ -60,11 +48,8 @@ pip install --upgrade pip
 pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2-binary sqlalchemy_orm python-dotenv requests
 deactivate
 
-```
-
-### Building the Woofplot UI
-```
-cd woofplot/ui
+cd ui
+sudo npm install --global yarn
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" 
@@ -79,6 +64,17 @@ ln -s ui/build .
 
 ### Setup WoofPlot (Configuring the DB and Environment)
 ```
+# Configure your postgresql database. Links for configuration/setup are above. 
+# You will add the username and password to your .env file below.
+# Add a superuser with the username for your default login (i.e. centos, ubuntu, cloud-user). 
+sudo -u postgres createuser --interactive
+
+# Using the psql command, add a password for the user you just added (change XXX and YYY in the ALTER psql command):
+psql postgres
+postgres=# ALTER USER XXX WITH PASSWORD 'YYY';
+postgres=# \q
+createdb woofplot
+
 cd woofplot
 cp env .env
 # Next: edit .env to replace XXX and YYY with your postgresql username and password, respectively.  Also change the string in JWT_SECRET so that your own secrets are generated correctly and securely.
