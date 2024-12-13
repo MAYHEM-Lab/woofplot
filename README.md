@@ -11,6 +11,7 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
   * [Configuration and Setup (Ubuntu)](https://www.digitalocean.com/community/tutorials/how-to-install-postgresql-on-ubuntu-20-04-quickstart)
 * [redis and python rq](https://python-rq.org)
 * [CSPOT](https://github.com/MAYHEM-Lab/cspot) -- you need only install the CSPOT tools (not docker), e.g. you can use install-ubuntu-nodocker.sh for Ubuntu distros.
+* WoofPlot can also be built in a docker container for Ubuntu using the steps below.  You can download a working container here.
 
 ## Installation
 ```
@@ -18,7 +19,7 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 git clone git@github.com:MAYHEM-Lab/woofplot.git
 ```
 
-### Ubuntu 22.04 Configuration
+### Ubuntu (v20.04 and after) Configuration
 ```
 # Ensure you do not have a firewall blocking port 8111.
 # Open port 8111 if you are running a firewall via: sudo ufw allow 8111/tcp
