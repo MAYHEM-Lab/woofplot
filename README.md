@@ -112,4 +112,3 @@ python woofplot-server.py
 * Press Ctrl-C on woofplot-server.py
 * Use ```kill -9 XXX``` to kill the process IDs (XXX) for redis-server and rq worker
 * Use ```deactivate``` to exit the python virtual environment
-```
