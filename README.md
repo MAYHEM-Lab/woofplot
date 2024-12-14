@@ -102,6 +102,7 @@ rq worker default > ./logs/woofplot-worker1.log 2>&1 &
 rq worker default > ./logs/woofplot-worker2.log 2>&1 &
 
 #edit file .env (use env as an example, replace XXX and YYY with your postgresql username and password)
+# also change the CSPOT_DIR to be the full path to your CSPOT utilities (build/bin files)
 source woofplotenv/bin/activate
 python woofplot-server.py 
 ```
