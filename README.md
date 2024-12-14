@@ -71,7 +71,7 @@ ln -s ui/build .
 sudo -u postgres createuser --interactive
 
 # Using the psql command, add a password for the user you just added (change XXX and YYY in the ALTER psql command):
-psql postgres
+sudo -u postgres psql postgres
 postgres=# ALTER USER XXX WITH PASSWORD 'YYY';
 postgres=# \q
 createdb woofplot
