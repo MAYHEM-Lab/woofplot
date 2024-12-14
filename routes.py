@@ -12,8 +12,6 @@ from flask import request, jsonify, g
 from db import db_session
 import utils 
 from flask_jwt_extended import create_access_token, create_refresh_token, current_user, jwt_required   
-from redis_config import queue
-from tasks import woof_load_task
 
 '''
 flask automatically redirects routes without a final slash (/) to one with a final slash 

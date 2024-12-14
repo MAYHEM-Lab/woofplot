@@ -5,3 +5,4 @@ woofplot_seed.py
 __pycache__
 woofplotenv
 logs
+*.rdb

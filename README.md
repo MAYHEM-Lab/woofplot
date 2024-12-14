@@ -105,7 +105,7 @@ rq worker default > ./logs/woofplot-worker2.log 2>&1 &
 
 # Start the server
 source woofplotenv/bin/activate
-python woofplot-server.py >> ./logs/woofplot-server.log &
+python woofplot-server.py >> ./logs/woofplot-server.log 2>&1 &
 ```
 * Navigate to http://YOUR_IPADDRESS:8111 (you can change the port in .env and restart the woofplot server)
 * Be sure to check the logs folder periodically to remove unneeded logs (or setup logrotate to do so)
