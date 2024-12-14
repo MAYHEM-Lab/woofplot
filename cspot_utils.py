@@ -1,10 +1,11 @@
-import requests, json, os, sys, argparse, io, time
+import requests, json, os, sys, argparse, io, time, dotenv
 from datetime import datetime, date, timedelta
 from subprocess import call,Popen,PIPE
 import logging as log
 
 DEBUG = False
-CSPOT_DIR='/home/centos/bin'
+dotenv.load_dotenv()
+CSPOT_DIR = os.environ.get("CSPOT_DIR")
 DONTUPDATEWOOFS=False
 WOOF_PREFIX_DEF = 'woof://128.111.45.24:53970/mnt/monitor/'
 WOOF_PREFIX_PROD='woof://128.111.45.83:57850/mnt/monitor/'
