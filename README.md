@@ -66,7 +66,8 @@ ln -s ui/build .
 ```
 # Configure your postgresql database. Links for configuration/setup are above. 
 # You will add the username and password to your .env file below.
-# Add a superuser with the username for your default login (i.e. centos, ubuntu, cloud-user). 
+# Add a superuser with the username for your default login (i.e. centos, ubuntu, cloud-user).
+# Start the database server if needed: sudo /etc/init.d/postgresql start
 sudo -u postgres createuser --interactive
 
 # Using the psql command, add a password for the user you just added (change XXX and YYY in the ALTER psql command):
