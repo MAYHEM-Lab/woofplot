@@ -78,7 +78,9 @@ createdb woofplot
 
 cd woofplot
 cp env .env
-# Next: edit .env to replace XXX and YYY with your postgresql username and password, respectively.  Also change the string in JWT_SECRET so that your own secrets are generated correctly and securely.
+# Next: edit .env to replace XXX and YYY with your postgresql username and password, respectively.  
+# Also change the string in JWT_SECRET so that your own secrets are generated correctly and securely.
+# Also change the CSPOT_DIR to be the full path to your CSPOT utilities (build/bin files)
 
 # Create an admin user in a file called woofplot_seed.py with these contents (change YYY to a strong password of your choosing):
 users_list = [
@@ -101,14 +103,14 @@ redis-server --daemonize yes --logfile ./logs/woofplot-redis.log
 rq worker default > ./logs/woofplot-worker1.log 2>&1 &
 rq worker default > ./logs/woofplot-worker2.log 2>&1 &
 
-#edit file .env (use env as an example, replace XXX and YYY with your postgresql username and password)
-# also change the CSPOT_DIR to be the full path to your CSPOT utilities (build/bin files)
+# Start the server
 source woofplotenv/bin/activate
-python woofplot-server.py 
+python woofplot-server.py >> ./logs/woofplot-server.log &
 ```
 * Navigate to http://YOUR_IPADDRESS:8111 (you can change the port in .env and restart the woofplot server)
+* Be sure to check the logs folder periodically to remove unneeded logs (or setup logrotate to do so)
 
 # Terminating WoofPlot
-* Press Ctrl-C on woofplot-server.py
+* Press Ctrl-C on woofplot-server.py if in foreground (else kill its process ID)
 * Use ```kill -9 XXX``` to kill the process IDs (XXX) for redis-server and rq worker
 * Use ```deactivate``` to exit the python virtual environment
