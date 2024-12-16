@@ -96,6 +96,7 @@ deactivate
 ```
 cd woofplot
 mkdir -p logs
+sudo /etc/init.d/postgresql start   #make sure the database is started
 
 # First check that redis-server is running (ps auxww |grep redis-server), if not start it with this:
 redis-server --daemonize yes --logfile ./logs/woofplot-redis.log
