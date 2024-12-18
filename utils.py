@@ -29,27 +29,34 @@ secsmap = {
     "minute": 300,
     "hour": 3600,
     "day": 86400,
-    "week": 604800
+    "week": 604800,
+    "moment": -1
 }
 
 ################
-def decimate_array(arr, factor):
-    return arr[::factor]
+def decimate(lst, target_count):
+    # Calculate the step size based on the target count
+    step = max(1, len(lst) // target_count)  # Ensure step is at least 1
+    return lst[::step]
 
 ################
-def get_woof_values(woofId,field,s,e,agg,interval): #between millisecond timestamps s and e
+def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecond timestamps s and e
     start = s/1000 #convert the millisecond values to seconds
     startdt = datetime.fromtimestamp(start)
     end = e/1000
     enddt = datetime.fromtimestamp(end)
     timediff = end-start
     div = secsmap[interval]
-    count_to_return = timediff/div
+    if raw:
+        assert interval == 'moment'
+        count_to_return = int(raw)
+    else:
+        count_to_return = int(timediff/div)
     woofvals = []
     responses = []
     if DEBUG:
         print(f'get_woof_values: {woofId}, {field}, {s}:{start}:{startdt}')
-        print(f'{agg}, {interval}, {e}:{end}:{enddt}')
+        print(f'{agg}, {interval}, {e}:{end}:{enddt}, {raw}')
     try:
         #get the results from the db - decimate them randomly to return only the count_to_return
         #if there are fewer rows it will return all of them, note that we have to re-sort them as they
@@ -60,18 +67,21 @@ def get_woof_values(woofId,field,s,e,agg,interval): #between millisecond timesta
                 WoofData.woof_id == woofId,  # Filter by woof_id
                 WoofData.ts >= startdt,    
                 WoofData.ts <= enddt
-            )
-        ).order_by(func.random()).limit(count_to_return).all()
+            ) #).order_by(func.random()).limit(count_to_return).all()
+        ).order_by(WoofData.ts).all()
         retn_len = len(rand_rows)
-        if retn_len < count_to_return:
+        if retn_len < count_to_return: #there were fewer in the DB than needed
             run_jobs(woofId,count_to_return) #calls load_woof on earliest seqno and loads count_to_return eles
         if retn_len == 0:
             #no results
             retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
             return retn,500
-
-        #sort results
-        results = sorted(rand_rows, key=lambda x: x.ts)
+        #keep the first and last from rand_rows
+        results = []
+        results.append(rand_rows[0])
+        templist = decimate(rand_rows[1:-1], count_to_return)
+        results.extend(templist)
+        results.append(rand_rows[-1])
 
         #process results for returning
         TYP = None
@@ -99,25 +109,8 @@ def get_woof_values(woofId,field,s,e,agg,interval): #between millisecond timesta
             responses.append(response)
 
         if DEBUG:
-            print(f"getting entry for woofID {woofId}")
-        #add the latest if it got decimated out
-        latest = get_woof_entry(woofId) #gets latest WoofData if no seqno is passed in
-        epoch = latest.ts.timestamp()
-        latest_ts = int(epoch*1000) #convert to millis and int
-        last = responses[-1] #last entry in responses
-        if latest_ts > last['timestamp']:
-            response = {}
-            response['woofId'] = woofId
-            response['field'] = field
-            response['timestamp'] = latest_ts
-            assert TYP is not None
-            if TYP == 'float': 
-                response['value'] = float(latest.data)
-            else:
-                tmpv = latest.data.split(':')
-                assert len(tmpv) > field
-                response['value'] = tmpv[field]
-            responses.append(response)
+            print(f"getting entry for woofID {woofId}: {len(responses)} responses")
+
     except Exception as e:
         print(f"Exception in get_woof_values: {e}")
         traceback.print_exc()
