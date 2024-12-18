@@ -102,7 +102,10 @@ def query():
     end = request.args.get('to')
     agg = request.args.get('aggregation')
     interval = request.args.get('interval')
-    retn,status = utils.get_woof_values(woofId,int(field),int(start),int(end),agg,interval)
+    raw = None
+    if 'raw_elements' in request.args:
+        raw = request.args.get('raw_elements')
+    retn,status = utils.get_woof_values(woofId,int(field),int(start),int(end),agg,interval,raw)
     return jsonify(retn), status
 
 @app.route('/api/login/', methods=['POST']) 
