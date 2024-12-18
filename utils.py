@@ -79,18 +79,22 @@ def get_woof_values(woofId,field,s,e,agg,interval): #between millisecond timesta
             response = {}  #woofId, field, ts, val
             response['woofId'] = woofId
             response['field'] = field
+            conv = get_conversion(woofId,field)
             val = ""
             TYP = 'string'
             try:
                 val = float(result.data)
                 TYP = 'float'
-            except ValueError as e:
+            except ValueError as e: #its a colon-delimited string so parse it:
                 tmpv = result.data.split(':')
                 assert len(tmpv) > field
                 val = tmpv[field]
             epoch = result.ts.timestamp()
             ts = int(epoch * 1000) #fend expects millis
             response['timestamp'] = ts
+            #convert the value here if needed
+            if conv and conv != "No conversion":
+                val = convert(val,conv)
             response['value'] = val
             responses.append(response)
 
@@ -283,6 +287,41 @@ def get_woof_entry(woofId, seqno=-1):
     return db_session.query(WoofData).filter(WoofData.woof_id == woofId, WoofData.seqno == seqno).first()
 
 ################
+def get_conversion(woofId, field):
+    retn = db_session.query(Columns).filter_by(woof_id=woofId, field=field).first()
+    if retn:
+        return retn.conversion
+    return None
+
+################
+def convert(val, conversion):
+    try:
+        floatval = float(val)
+    except Exception as e:
+        if DEBUG:
+            print(f"Exception in convert: {e}\n{val}, {conversion}")
+        return val
+    if conversion == "c2f":
+        f = floatval*1.8 + 32
+        val = f"{f:.2f}"
+    elif conversion == "f2c":
+        c = (floatval - 32)*0.555
+        val = f"{c:.2f}"
+    elif conversion == "mps2mph":
+        mph = floatval / 0.447
+        val = f"{mph:.2f}"
+    elif conversion == "mph2mps":
+        mps = floatval * 0.447
+        val = f"{mps:.2f}"
+    elif conversion == "kph2mph":
+        mph = floatval / 1.609
+        val = f"{mph:.2f}"
+    elif conversion == "mph2kph":
+        kph = floatval * 1.609
+        val = f"{kph:.2f}"
+    return val
+
+################
 def get_all_woof_entries(woofurl):
     woof = get_woof_from_db(woofurl)
     if DEBUG:
@@ -370,8 +409,8 @@ def run_jobs(woofurl,limit=JOB_LIMIT):
 def run_jobs(woofId,limit=JOB_LIMIT):
     #run background job to load woof entries ahead of the earliest sequence number
     try:
+        woofurl = get_woof_url_from_id(woofId)
         if DEBUG:
-            woofurl = get_woof_url_from_id(woofId)
             print(f"run_jobs: running background jobs for {woofurl}, limit: {limit}")
         #if limit == -1, get the most recent entries
         if limit == -1: #just call load_woof which loads a small number of the most recent entries
