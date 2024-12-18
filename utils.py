@@ -13,16 +13,18 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import joinedload
 from db import db_session
 from models import Users, Woofs, Columns, WoofData
-import time
-import db
-import cspot_utils
-import tasks
+import time, random
+import db, cspot_utils, tasks
 from redis import Redis
 from redis_config import queue
 JOB_LIMIT = 250
 SMALL_JOB = 20
 
-DEBUG = os.environ.get("WPDEBUG")
+tmp = os.environ.get("WPDEBUG")
+if tmp.lower() in ['true', '1']:
+    DEBUG = True
+else: 
+    DEBUG = False
 secsmap = {
     "minute": 300,
     "hour": 3600,

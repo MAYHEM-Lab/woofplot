@@ -3,18 +3,28 @@
     Author: Chandra Krintz, 
     License: UCSB BSD -- see LICENSE file in this repository
 '''
-import os, sys, dotenv, argparse, random
+import os, sys, dotenv, argparse, random, math
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine
+from sqlalchemy.sql import func
 from sqlalchemy.orm import scoped_session, sessionmaker
 
 dotenv.load_dotenv()
-DEBUG = os.environ.get("WPDEBUG")
+tmp = os.environ.get("WPDEBUG")
+if tmp.lower() in ['true', '1']:
+    DEBUG = True
+else: 
+    DEBUG = False
 dburi = os.environ.get("SQLALCHEMY_DATABASE_URI")
 dbname = os.environ.get("DATABASE")
 engine = create_engine(dburi)
 db_session = scoped_session(sessionmaker(
     autocommit=False, autoflush=False, bind=engine))
+
+#set seed on DB's random function
+seed_value = float(os.environ.get("INTEGER_SEED_VALUE"))
+scaled_value = math.tanh(seed_value) #convert it to value between -1 and 1
+db_session.execute(func.setseed(scaled_value))
 
 #Everything below happens after the db_session is created, thus can use the db
 import utils

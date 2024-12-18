@@ -5,3 +5,4 @@ WPDEBUG="false"
 SQLALCHEMY_DATABASE_URI="postgresql://XXX:YYY@localhost:5432/woofplot"
 DATABASE="woofplot"
 CSPOT_DIR="/home/ubuntu/bin"
+INTEGER_SEED_VALUE=42
