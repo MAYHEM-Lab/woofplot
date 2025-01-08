@@ -3,7 +3,7 @@
     Author: Chandra Krintz, 
     License: UCSB BSD -- see LICENSE file in this repository
 '''
-import os, json, dotenv
+import os, json, dotenv, sys
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
@@ -27,6 +27,9 @@ if __name__ == '__main__':
         dotenv.load_dotenv()
         jwt_secret = os.environ.get("JWT_SECRET")
         tmp = os.environ.get("WPDEBUG")
+        if tmp is None:
+            print('Failed to setup woofplot environment.  Have you configured your .env file correctly?  See Configure WoofPlot on this page: https://github.com/MAYHEM-Lab/woofplot/blob/main/README.md')
+            sys.exit(1)
         if tmp.lower() in ['true', '1']:
             DEBUG = True
         else: 
