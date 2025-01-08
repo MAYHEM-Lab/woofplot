@@ -62,15 +62,16 @@ cd ..
 ln -s ui/build .
 ```
 
-### Next Step: Configure WoofPlot (Setup the DB and Environment)
+## Configure WoofPlot (Setup the DB and Environment)
 ```
 # Configure your postgresql database. Links for configuration/setup are above. 
 # You will add the username and password to your .env file below.
 # Add a superuser with the username for your default login (i.e. centos, ubuntu, cloud-user).
-# Start the database server if needed: sudo /etc/init.d/postgresql start
+# Start the database server if needed, then create the user with superuser privileges
+sudo /etc/init.d/postgresql start
 sudo -u postgres createuser --interactive
 
-# Using the psql command, add a password for the user you just added (change XXX and YYY in the ALTER psql command):
+# Using the psql command, add a password for the user you just added (change XXX and YYY in the ALTER psql command).  Then create the woofplot dB:
 sudo -u postgres psql postgres
 postgres=# ALTER USER XXX WITH PASSWORD 'YYY';
 postgres=# \q
