@@ -62,7 +62,7 @@ cd ..
 ln -s ui/build .
 ```
 
-### Setup WoofPlot (Configuring the DB and Environment)
+### Next Step: Configure WoofPlot (Setup the DB and Environment)
 ```
 # Configure your postgresql database. Links for configuration/setup are above. 
 # You will add the username and password to your .env file below.
