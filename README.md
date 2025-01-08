@@ -38,7 +38,7 @@ sudo update-alternatives --config python   #choose python3.11 and verify its the
 python -m ensurepip
 python -m pip install --upgrade pip
 ```
-### Building WoofPlot (regardless of distro)
+### Next Step: Build WoofPlot (regardless of distro)
 ```
 cd woofplot
 
