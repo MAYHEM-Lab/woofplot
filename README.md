@@ -18,6 +18,7 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 #install cspot first (using the link above).
 git clone git@github.com:MAYHEM-Lab/woofplot.git
 ```
+To use a **pre-made docker container** (Ubuntu 24.04), see [these instructions](https://shorturl.at/KesT1).
 
 ### Ubuntu (v20.04 and after) Configuration
 ```
