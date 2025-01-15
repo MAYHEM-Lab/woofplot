@@ -16,6 +16,7 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 ## Installation
 ```
 #install cspot first (using the link above).
+cd
 git clone git@github.com:MAYHEM-Lab/woofplot.git
 ```
 To use a **pre-made docker container** (Ubuntu 24.04), see [these instructions](https://shorturl.at/KesT1).
@@ -26,6 +27,11 @@ To use a **pre-made docker container** (Ubuntu 24.04), see [these instructions](
 # Open port 8111 if you are running a firewall via: sudo ufw allow 8111/tcp
 sudo apt update; sudo apt -y upgrade; sudo apt -y autoremove
 sudo apt install -y python3 python-is-python3 python3-dev redis npm postgresql logrotate build-essential libpq-dev postgresql-contrib python3-virtualenv
+
+# For some versions of ubuntu, you may need this for your particular python version (the below uses python3.8)
+sudo apt install -y python3.8-venv
+
+# Setup your environment PATH variable to access the tools
 export PATH=${PATH}:/home/ubuntu/.local/bin   #place this in ~/.bashrc also
 ```
 ### Centos 8 Stream Configuration
@@ -41,7 +47,7 @@ python -m pip install --upgrade pip
 ```
 ### Next Step: Build WoofPlot (regardless of distro)
 ```
-cd woofplot
+cd ~/woofplot
 
 python -m venv woofplotenv
 source woofplotenv/bin/activate
@@ -65,30 +71,34 @@ ln -s ui/build .
 
 ## Configure WoofPlot (Setup the DB and Environment)
 ```
-# Configure your postgresql database. Links for configuration/setup are above. 
-# You will add the username and password to your .env file below.
-# Add a superuser with the username for your default login (i.e. centos, ubuntu, cloud-user).
 # Start the database server if needed, then create the user with superuser privileges
 sudo /etc/init.d/postgresql start
-sudo -u postgres createuser --interactive
 
-# Using the psql command, add a password for the user you just added (change XXX and YYY in the ALTER psql command).  Then create the woofplot dB:
+# Configure your postgresql database. Links for configuration/setup are above. 
+sudo -u postgres createuser --interactive   # username is your login (ubuntu, centos, cloud-user); Y to superuser privileges
+
+# Using psql add a password for this user
+# XXX is the username you just added via createuser (it is your login: ubuntu, centos, cloud-user, ...)
+# YYY is any strong password for the database -- make sure it is single quotes. 
 sudo -u postgres psql postgres
 postgres=# ALTER USER XXX WITH PASSWORD 'YYY';
 postgres=# \q
+
+# Then create the woofplot dB:
 createdb woofplot
 
-cd woofplot
-cp env .env
-# Next: edit .env to replace XXX and YYY with your postgresql username and password, respectively.  
-# Also change the string in JWT_SECRET so that your own secrets are generated correctly and securely.
-# Also change the CSPOT_DIR to be the full path to your CSPOT utilities (build/bin files)
+cd ~/woofplot
+cp env .env    #change XXX and YYY to the values you set above using psql
+# You can also change  JWT_SECRET to any string (used to generate secrets for access tokens)
+# You can also change CSPOT_DIR to be the full path to your CSPOT utilities (build/bin files)
 
-# Create an admin user in a file called woofplot_seed.py with these contents (change YYY to a strong password of your choosing):
+# Create an admin user in a file called woofplot_seed.py with these contents:
+# PWD is the admin password that you will use initially for the woofplot app (you can change it in the app)
 users_list = [
-    ('admin','YYY',True),
+    ('admin','PWD',True),
 ]
-# Run the db script to setup the woofplot tables. Note that this deletes any tables/data that you have put in the woofplot database from earlier runs.
+# Run the db script to setup the woofplot tables.
+# Note that this deletes any tables/data that you have put in the woofplot database from earlier runs.
 source woofplotenv/bin/activate
 python db.py -c
 deactivate
@@ -96,7 +106,7 @@ deactivate
 
 # Running WoofPlot
 ```
-cd woofplot
+cd ~/woofplot
 mkdir -p logs
 sudo /etc/init.d/postgresql start   #make sure the database is started
 
