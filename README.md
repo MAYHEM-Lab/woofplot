@@ -19,7 +19,7 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 cd
 git clone git@github.com:MAYHEM-Lab/woofplot.git
 ```
-To use a **pre-made docker container** (Ubuntu 24.04), see [these instructions](https://shorturl.at/KesT1).
+To use a **pre-made docker container** (Ubuntu 24.04), see [these instructions](https://docs.google.com/document/d/1nIc00qmNRd9zsD2ApW7BYlDljN3qI2IlRiTh67xi3pM).
 
 ### Ubuntu (v20.04 and after) Configuration
 ```
