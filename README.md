@@ -54,7 +54,7 @@ cd ~/woofplot
 python -m venv woofplotenv
 source woofplotenv/bin/activate
 pip install --upgrade pip
-pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2-binary sqlalchemy_orm python-dotenv requests
+pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2-binary sqlalchemy_orm pytz python-dotenv requests
 deactivate
 
 cd ui
