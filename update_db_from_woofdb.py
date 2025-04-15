@@ -128,10 +128,27 @@ def main():
         woofdbuser = args["dbinfo"]["user"] 
         if not DEBUG: #set either via .env or json config file
             DEBUG = args["DEBUG"]
+        outfile = args["fname"]
     except Exception as e:
         print(e)
         print("Unable to parse json file as expected. \nUSAGE: python3 getWoofData.py cf.json")
         sys.exit(1)
+
+    done_dict = {}
+    if os.path.isfile(outfile):
+        with open(outfile, "r") as f:
+            for line in f:
+                #1:woof://128.111.45.61/davisstations/wise-batt1:wise_batt1:288:18112
+                line = line.strip()
+                eles = line.split(':')
+                woofid = eles[0]
+                woofurl = f'{eles[1]}:{eles[2]}'
+                nm = eles[3]
+                sseqno = eles[4]
+                eseqno = eles[5]
+                #if there are multiples in the file, this will store the last one
+                #which is what we want since we'll repeat ones that didn't finish
+                done_dict[woofurl] = (sseqno,eseqno)
 
     #db is the woofdb from which we are loading
     db = dbiface.DBobj(woofdb,woofdbpwd,woofdbhost,woofdbuser)
@@ -163,28 +180,46 @@ def main():
         startsno = endsno - total_samples
         if startsno < 0:
             startsno = measurements_per_day * 3 #start 3 days from sensor instantiation
-        if DEBUG:
-            print(f'\tavg_sec_diff: {int(avg_sec_diff)}, count: {count}, measperday: {measurements_per_day}, total_samples: {total_samples}')
-            print(f'\tsql query: {startsno} - {endsno}')
-        if startsno == endsno:
-            continue #skip this one, it is done
-        retn = get_woofdb_data(tname, startsno, endsno) #seqno, dt, data
-        if DEBUG:
-            print(f'\tadding to woofplot DB; len: {len(retn)}, first ele: {retn[0]}')
-        with open("woofplot_db_updates.txt", "a") as f:
-            f.write(f"{woof.id}:{woof.url}:{tname}:{startsno}:{endsno}\n")
-        for ele in retn:
-            exists = db_session.query(WoofData).filter_by(woof_id=woof.id, ts=ele[1]).first()
 
-            if not exists:
-                woofdata = WoofData(
-                    seqno = ele[0],
-                    ts = ele[1],
-                    data = ele[2],
-                    woof=woof
-                )
-                db_session.add(woofdata)
-        db_session.commit()
+        #first check if we've already done this (and crashed out due to an error)
+        PROCESSIT = True
+        snpair = None
+        if woof.url in done_dict:
+            snpair = done_dict[woof.url]
+            PROCESSIT = False
+        if snpair is not None:
+            start = int(snpair[0])
+            end = int(snpair[1])
+            #check that we have all of the seqnos
+            donecount = db_session.query(func.count(WoofData.id))\
+                .filter(WoofData.woof_id == woof.id)\
+                .filter(WoofData.seqno.between(start, end))\
+                .scalar()
+            if donecount < (end-start):
+                PROCESSIT = True
+
+        if PROCESSIT:
+            print(f'processing {woof.url} donecount: {donecount} vs {end-start}')
+            with open(outfile, "a") as f:
+                f.write(f"{woof.id}:{woof.url}:{tname}:{startsno}:{endsno}\n")
+            retn = get_woofdb_data(tname, startsno, endsno) #seqno, dt, data
+            if DEBUG:
+                print(f'\tavg_sec_diff: {int(avg_sec_diff)}, count: {count}, measperday: {measurements_per_day}, total_samples: {total_samples}')
+                print(f'\tsql query: {startsno} - {endsno}')
+                print(f'\tadding to woofplot DB; len: {len(retn)}, first ele: {retn[0]}')
+            for ele in retn:
+                exists = db_session.query(WoofData).filter_by(woof_id=woof.id, ts=ele[1]).first()
+
+                if not exists:
+                    woofdata = WoofData(
+                        seqno = ele[0],
+                        ts = ele[1],
+                        data = ele[2],
+                        woof=woof
+                    )
+                    db_session.add(woofdata)
+                    db_session.commit()
+                    db_session.expunge(woofdata)
 
 ######################################
 if __name__ == "__main__":
