@@ -72,7 +72,7 @@ class WoofData(Base):
         Index('ix_woofdata_seqno', 'seqno'),  # This creates an index on the ts column
     )
     def __repr__(self):
-        return f"<WoofData(id={self.id}, woofid={self.woof_id}, ts={self.ts} ({self.ts.timestamp()}), data={self.data}, seqno={self.seqno}>"
+        return f"<WoofData(id={self.id}, woofid={self.woof_id}, ts={self.ts} ({self.ts}), data={self.data}, seqno={self.seqno}>"
 
 class State(Base): 
     __tablename__ = 'appstate'

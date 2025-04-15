@@ -6,3 +6,5 @@ __pycache__
 woofplotenv
 logs
 *.rdb
+cf.json
+woofplot_db_updates.txt

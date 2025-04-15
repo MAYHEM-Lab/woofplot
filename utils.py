@@ -3,8 +3,8 @@
     Author: Chandra Krintz, 
     License: UCSB BSD -- see LICENSE file in this repository
 '''
-import traceback, sys, argparse, os, json
-from datetime import datetime, timedelta
+import traceback, sys, argparse, os, json, pytz
+from datetime import datetime, timedelta, timezone
 from passlib.hash import sha256_crypt
 from sqlalchemy.sql import func
 from sqlalchemy import UniqueConstraint, and_
@@ -17,12 +17,14 @@ import time, random
 import db, cspot_utils, tasks
 from redis import Redis
 from redis_config import queue
+MAX_WOOF_ELES = 10000 #typical number of entries in a woof
 JOB_LIMIT = 250
 SMALL_JOB = 20
 
 tmp = os.environ.get("WPDEBUG")
 if tmp.lower() in ['true', '1']:
     DEBUG = True
+    print(f'turning on DEBUG mode!')
 else: 
     DEBUG = False
 secsmap = {
@@ -32,6 +34,7 @@ secsmap = {
     "week": 604800,
     "moment": -1
 }
+PacTZ = pytz.timezone('US/Pacific')
 
 ################
 def decimate(lst, target_count):
@@ -42,9 +45,9 @@ def decimate(lst, target_count):
 ################
 def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecond timestamps s and e
     start = s/1000 #convert the millisecond values to seconds
-    startdt = datetime.fromtimestamp(start)
+    startdt = datetime.fromtimestamp(start,tz=PacTZ)
     end = e/1000
-    enddt = datetime.fromtimestamp(end)
+    enddt = datetime.fromtimestamp(end,tz=PacTZ)
     timediff = end-start
     div = secsmap[interval]
     if raw:
@@ -70,12 +73,16 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
             ) #).order_by(func.random()).limit(count_to_return).all()
         ).order_by(WoofData.ts).all()
         retn_len = len(rand_rows)
-        if retn_len < count_to_return: #there were fewer in the DB than needed
-            run_jobs(woofId,count_to_return) #calls load_woof on earliest seqno and loads count_to_return eles
         if retn_len == 0:
             #no results
             retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
             return retn,500
+        tdiff = rand_rows[0].ts - startdt
+        if DEBUG:
+            print(f"query ts returned: {rand_rows[0].ts} -- {rand_rows[retn_len-1].ts}, eles: {retn_len} tdiff: {tdiff.days}",flush=True) 
+        #CJK - removed the check here to load data in the background b/c if it takes too long it will be reissued repeatedly
+        #check then run_jobs(woofId,MAX_WOOF_ELES) #calls load_woof on earliest seqno and loads count_to_return eles
+
         #keep the first and last from rand_rows
         results = []
         results.append(rand_rows[0])
@@ -144,8 +151,8 @@ def add_or_update_woof_in_db(data,seqno = -1):
     try:
         woof = get_woof_from_db(woofurl) 
         if not woof:  #create woof and columns
-            #a new woof better not have a seqno with value -1 a cspot_get 
-            #should have been called to pass an actual value in
+            #a new woof better not have a seqno with value -1 as a cspot_get 
+            #should have been called to pass an actual value in and set it!
             assert seqno != -1
             woof = add_woof_to_db(woofurl) 
             woof.name = data["name"]
@@ -369,8 +376,6 @@ def get_all_woofs_from_db():
     res = []
     for woof in woofs:
         #spawn job in background to load a small number of latest entries for each woof to prime the pump
-        if DEBUG:
-            print(f'calling run_jobs from get_all_woofs_from_db for {woof.id}:{woof.url}')
         run_jobs(woof.id,-1)
         woof_data = {
             'woofId': woof.id,
@@ -395,25 +400,26 @@ def add_users_in_list_to_db(ulist):
 
 ################
 def run_jobs(woofurl,limit=JOB_LIMIT):
-    wid = get_woof_id_from_url(woofurl,limit)
-    run_jobs(wid)
+    wid = get_woof_id_from_url(woofurl)
+    run_jobs(wid,limit,woofurl)
 
 ################
-def run_jobs(woofId,limit=JOB_LIMIT):
+def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
     #run background job to load woof entries ahead of the earliest sequence number
     try:
-        woofurl = get_woof_url_from_id(woofId)
+        woofurl = wurl
+        if wurl == None:
+            woofurl = get_woof_url_from_id(woofId)
         if DEBUG:
             print(f"run_jobs: running background jobs for {woofurl}, limit: {limit}")
-        #if limit == -1, get the most recent entries
         if limit == -1: #just call load_woof which loads a small number of the most recent entries
             job1 = queue.enqueue(tasks.woof_load_task, woofurl, -1, SMALL_JOB) #calls load_woof(woofurl,-1,SMALL_JOB)
         else:
-            earliest_seqno = get_earliest_seqno_from_woofId(woofId)
+            earliest_seqno = get_earliest_seqno_from_woofId(woofId) #esno in database
             if limit > JOB_LIMIT:
                 lim = limit
                 while lim > 0: #run multiple jobs with different earliest_seqnos
-                    queue.enqueue(tasks.woof_load_task, woofurl, earliest_seqno, JOB_LIMIT) 
+                    queue.enqueue(tasks.woof_load_task, woofurl, earliest_seqno, JOB_LIMIT) #load_woof(wurl,esno,job_limit)
                     earliest_seqno = earliest_seqno - JOB_LIMIT
                     lim = lim - JOB_LIMIT
             else:
@@ -479,7 +485,6 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
     else: #valid endsn was passed in, get the startsn
         assert latest != -1
         startsn = int(endsn-count)
-        print(f"\tload_woof: setting startsn {startsn} given endsn {endsn}")
 
     #load the missing data into the database from the woof
     print(f"\tload_woof: loading missing data from startsn {startsn} to endsn {endsn}")

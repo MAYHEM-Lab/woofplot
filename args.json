@@ -1,0 +1,9 @@
+{
+    "dbinfo": {
+      "db":"XXX",
+      "user": "XXX",
+      "pwd": "XXX",
+      "host": "XXX"
+    },
+    "DEBUG": false
+}
