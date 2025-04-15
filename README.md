@@ -3,7 +3,10 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 1. Frontend web interface for plotting time series data and configuring sources from which to extract data
 2. Backend server to keep configured data sources synchronized, extract time series data, and host the frontend
 
-## Requirements
+## Fast Start
+* Use the **pre-made docker container** (Ubuntu 24.04), via these [these instructions](https://docs.google.com/document/d/1nIc00qmNRd9zsD2ApW7BYlDljN3qI2IlRiTh67xi3pM).
+
+## Requirements (for non-docker-container installation)
 * [python3 as python](https://www.python.org/downloads/)
 * [yarn](https://classic.yarnpkg.com/en/docs/install)
 * [PostgreSQL](https://www.postgresql.org)
@@ -11,7 +14,6 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
   * [Configuration and Setup (Ubuntu)](https://www.digitalocean.com/community/tutorials/how-to-install-postgresql-on-ubuntu-20-04-quickstart)
 * [redis and python rq](https://python-rq.org)
 * [CSPOT](https://github.com/MAYHEM-Lab/cspot) -- you need only install the CSPOT tools (not docker), e.g. you can use install-ubuntu-nodocker.sh for Ubuntu distros.
-* WoofPlot can also be built in a docker container for Ubuntu using the steps below.  You can download a working container here. Start the container, then run the Setup and Running steps below.
 
 ## Installation
 ```
@@ -52,7 +54,7 @@ cd ~/woofplot
 python -m venv woofplotenv
 source woofplotenv/bin/activate
 pip install --upgrade pip
-pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2-binary sqlalchemy_orm python-dotenv requests
+pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2-binary sqlalchemy_orm pytz python-dotenv requests
 deactivate
 
 cd ui
