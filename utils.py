@@ -73,6 +73,8 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
             ) #).order_by(func.random()).limit(count_to_return).all()
         ).order_by(WoofData.ts).all()
         retn_len = len(rand_rows)
+        if retn_len < count_to_return:
+            run_jobs(woofId,count_to_return) #calls load_woof on earliest seqno and loads
         if retn_len == 0:
             #no results
             retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
@@ -80,8 +82,6 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
         tdiff = rand_rows[0].ts - startdt
         if DEBUG:
             print(f"query ts returned: {rand_rows[0].ts} -- {rand_rows[retn_len-1].ts}, eles: {retn_len} tdiff: {tdiff.days}",flush=True) 
-        #CJK - removed the check here to load data in the background b/c if it takes too long it will be reissued repeatedly
-        #check then run_jobs(woofId,MAX_WOOF_ELES) #calls load_woof on earliest seqno and loads count_to_return eles
 
         #keep the first and last from rand_rows
         results = []
