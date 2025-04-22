@@ -18,7 +18,7 @@ import db, cspot_utils, tasks
 from redis import Redis
 from redis_config import queue
 MAX_WOOF_ELES = 10000 #typical number of entries in a woof
-JOB_LIMIT = 250
+JOB_LIMIT = 200
 SMALL_JOB = 20
 
 tmp = os.environ.get("WPDEBUG")
@@ -413,17 +413,23 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
         if DEBUG:
             print(f"run_jobs: running background jobs for {woofurl}, limit: {limit}")
         if limit == -1: #just call load_woof which loads a small number of the most recent entries
-            job1 = queue.enqueue(tasks.woof_load_task, woofurl, -1, SMALL_JOB) #calls load_woof(woofurl,-1,SMALL_JOB)
+            queue.enqueue(tasks.woof_load_task, woofurl, -1, SMALL_JOB) #calls load_woof(woofurl,-1,SMALL_JOB)
         else:
             earliest_seqno = get_earliest_seqno_from_woofId(woofId) #esno in database
-            if limit > JOB_LIMIT:
+            esno = earliest_seqno - limit
+            if esno < 1: #handle case where we are near the start of a woof
+                esno = 1
+                limit = earliest_seqno - 1
+                if esno < limit:
+                    queue.enqueue(tasks.woof_load_task, woofurl, esno, limit) #calls load_woof
+            elif limit > JOB_LIMIT:
                 lim = limit
-                while lim > 0: #run multiple jobs with different earliest_seqnos
-                    queue.enqueue(tasks.woof_load_task, woofurl, earliest_seqno, JOB_LIMIT) #load_woof(wurl,esno,job_limit)
-                    earliest_seqno = earliest_seqno - JOB_LIMIT
+                while lim > 0: #run multiple jobs with different esno's
+                    queue.enqueue(tasks.woof_load_task, woofurl, esno, JOB_LIMIT) #load_woof
+                    esno = esno - JOB_LIMIT
                     lim = lim - JOB_LIMIT
             else:
-                job1 = queue.enqueue(tasks.woof_load_task, woofurl, earliest_seqno, limit) #calls load_woof(woofurl,esno,limit)
+                queue.enqueue(tasks.woof_load_task, woofurl, esno, limit) #calls load_woof
     except Exception as e:
         print(f"Exception in run_jobs: {e}")
 
@@ -440,13 +446,15 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
     woof = get_woof_from_db(woofurl) #adds it if not there
     latest = woof.latest_seq_no
     print(f"load_woof: {woofurl}, {endsn}, {count}: {latest}")
+    #load_woof: woof://169.231.230.76/sharedfs/unl-data/daviscupsout, 1, 250: 234
+    #     load_woof problem: woofid: 6 startsn -249 endsn 1
     retn = None #return the ts, seqno, data for last cspot entry loaded
     if endsn == -1: #get the woof latest and work back
         res,OK = cspot_get(woofurl)
         if not OK:
             print(f'load_woof [latest]: cspot call failed {woofurl} trying again...')
             time.sleep(0.5)
-            res,OK = cspot_get(woofurl)  #res format (indices: val=0, ts=2, seqno=5)
+            res,OK = cspot_get(woofurl)  #res format (indices: val/data=0, ts=2, seqno=5)
             #472.000000 time: 1732476793.9533109665 10.0.1.158 seq_no: 76147
             #val1:val2 time: 1732476793.9533109665 10.0.1.158 seq_no: 76147
             if not OK:
@@ -460,9 +468,11 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
             startsn = int(endsn - count)
         else: #existing woof, load from db latest to wooflatest
             startsn = int(latest)
+
         woof.latest_seq_no = endsn #update the database to match wooflatest which we are about to add
         db_session.commit() #commit right away in case there is a race to add data for some reason
-        print(f"\tload_woof: updated endsn {endsn} startsn {startsn} woof-latest {endsn}")
+        if DEBUG: 
+            print(f"\tload_woof: updated endsn {endsn} startsn {startsn} woof-latest {endsn}")
         epoch = float(res[2])
         ts = datetime.fromtimestamp(epoch)
         retn = (ts,endsn,res[0]) #return the latest
@@ -475,10 +485,9 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
         woofdata = WoofData(
             ts = ts,
             seqno = endsn,
-            data = res[0],
+            data = res[0].strip(),
             woof=woof 
         )
-        print(f"\tload_woof: adding seqno {endsn}")
         db_session.add(woofdata)
         db_session.commit()
 
@@ -486,8 +495,13 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
         assert latest != -1
         startsn = int(endsn-count)
 
+    if startsn <= 0: 
+        print(f"\tload_woof problem: woofid: {woof.id} startsn {startsn} endsn {endsn}",flush=True)
+        assert False #assert startsn > 0
+    assert startsn != endsn #retn is not set here so returning None below (fix this!)
+
     #load the missing data into the database from the woof
-    print(f"\tload_woof: loading missing data from startsn {startsn} to endsn {endsn}")
+    print(f"\tload_woof: loading missing data from startsn {startsn} to endsn {endsn}",flush=True)
     for seqno in range(startsn, endsn):
         #check if its already in the db, and skip if so
         ts_exists = db_session.query(WoofData).filter(WoofData.seqno == seqno, WoofData.woof_id == woof.id).first()
@@ -512,7 +526,7 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
         woofdata = WoofData(
             ts = ts,
             seqno = seqno,
-            data = res[0],
+            data = res[0].strip(),
             woof=woof 
         )
         db_session.add(woofdata)

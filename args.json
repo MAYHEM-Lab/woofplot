@@ -5,6 +5,8 @@
       "pwd": "XXX",
       "host": "XXX"
     },
+    "woofId": 6,
+    "firstdt": "2025-04-22 09:54:00",
     "fname": "update_list.txt",
     "DEBUG": false
 }

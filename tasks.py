@@ -9,7 +9,7 @@ from rq import get_current_job
 def woof_load_task(url, seqno, count):
     job = get_current_job()
     taskId = job.id
-    print(f"worker {taskId} loading {url} is starting at {datetime.now()}")
+    print(f"worker {taskId} loading {url} is starting at {datetime.now()}",flush=True)
     utils.load_woof(url,seqno,count)
-    print(f"worker {taskId} loading {url} is done at {datetime.now()}")
+    print(f"worker {taskId} loading {url} is done at {datetime.now()}",flush=True)
 
