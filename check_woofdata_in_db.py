@@ -70,27 +70,27 @@ def main():
         woofdata = db_session.query(WoofData).filter(  
                 and_(
                     WoofData.woof_id == woofId,  # Filter by woof_id
-                    WoofData.ts > firstdt 
+                    WoofData.ts < firstdt 
                 ) 
             ).order_by(WoofData.seqno).all()
-        #delete all data after firstdt
+        #delete all data before/after firstdt depending on conditional above
         latest = -1
         for woofd in woofdata:
             latest = woofd.seqno #ordered by seqno, so this will be the greatest value at end
             print(f'id:{woofd.id}/{woofd.seqno}, ts:{woofd.ts}, data:{woofd.data}')
-            db_session.delete(woofd) #be careful with this!
-        db_session.commit()
+            #db_session.delete(woofd) #be careful with this!
+        #db_session.commit()
         latest = db_session.query(func.max(WoofData.seqno)).filter_by(woof_id=woofId).scalar()
-        assert latest != -1
-        assert latest != None
         #update the woof's latest_seq_no
+        if latest == None or latest == 1:
+            latest = -1
         retn =  db_session.query(Woofs).with_entities(Woofs.url).filter(Woofs.id == woofId).first()
         assert retn
         url = retn[0]
         woof = db_session.query(Woofs).filter_by(url=url).first()
-        woof.latest_seq_no = latest
+        #woof.latest_seq_no = latest #this will be -1 if empty
         print(f'woof_latest = {woof.latest_seq_no}; latest = {latest}')
-        db_session.commit()
+        #db_session.commit()
     except Exception as e:
         print(f"Exception in check_woofdata_in_db.py:main: {e}")
         traceback.print_exc()
