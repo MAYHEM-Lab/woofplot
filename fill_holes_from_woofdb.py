@@ -1,4 +1,4 @@
-# update_db_from_woofdb.py
+# fill_holes_from_woofdb.py
 '''
     Author: Chandra Krintz, 
     License: UCSB BSD -- see LICENSE file in this repository
@@ -109,8 +109,8 @@ def get_tname(woofurl): #returns table name used in woofdb
 ###########################
 def main():
     ''' 
-    python update_db_from_woofdb.py args.json #see the json file for argument details
-    This program fills in entries into the woofplot tables for all seqno's in the woofdb on the alerts system for 1 year prior to the earliest seqno in the woofplot table for that woof.  It computes 1 year using the timediff between seqnos (sampling rate).  If the program crashes, this program will skip the ones its already added and continue.  To fill in the holes in the db, use fill_holes_from_woofdb.py.
+    python fill_holes_from_woofdb.py args.json #see the json file for argument details
+    This program fills in entries into the woofplot tables for missing seqnos from the woofdb on the alerts system.  It gets the earliest sequence number from woofplot for each woof.id and works forward, looking for holes.  It fills in the holes from woofdb. If you want to add data ahead of the earliest sequence number, use update_db_from_woofdb.py instead.
     '''
     global DEBUG, db
     parser = argparse.ArgumentParser(description='update woofplot table data from woofdb')
@@ -118,7 +118,7 @@ def main():
     pargs = parser.parse_args()
 
     if not os.path.isfile(pargs.json):
-        print("Unable to open json file {}. \nUSAGE: python update_db_from_woofdb.py cf.json".format(pargs.json))
+        print("Unable to open json file {}. \nUSAGE: python fill_holes_from_woofdb.py cf.json".format(pargs.json))
         sys.exit(1)
     try:
         with open(pargs.json, "r") as jfile:
@@ -129,98 +129,42 @@ def main():
         woofdbuser = args["dbinfo"]["user"] 
         if not DEBUG: #set either via .env or json config file
             DEBUG = args["DEBUG"]
-        outfile = args["fname"]
     except Exception as e:
         print(e)
-        print("Unable to parse json file as expected. \nUSAGE: python3 update_db_from_woofdb.py cf.json")
+        print("Unable to parse json file as expected. \nUSAGE: python3 fill_holes_from_woofdb.py cf.json")
         sys.exit(1)
 
-    done_dict = {}
-    if os.path.isfile(outfile):
-        with open(outfile, "r") as f:
-            for line in f:
-                #1:woof://128.111.45.61/davisstations/wise-batt1:wise_batt1:288:18112
-                line = line.strip()
-                eles = line.split(':')
-                woofid = eles[0]
-                woofurl = f'{eles[1]}:{eles[2]}'
-                nm = eles[3]
-                sseqno = eles[4]
-                eseqno = eles[5]
-                #if there are multiples in the file, this will store the last one
-                #which is what we want since we'll repeat ones that didn't finish
-                done_dict[woofurl] = (sseqno,eseqno)
-
+    print(f'Debug flag: {DEBUG}')
     #db is the woofdb from which we are loading
     db = dbiface.DBobj(woofdb,woofdbpwd,woofdbhost,woofdbuser)
 
-    #db_session is the woofplot database
+    #db_sessionis the woofplot database
     woofs = db_session.query(Woofs).all()
     for woof in woofs:
-        print(woof.id, woof.url)
+        print(f'processing woof: {woof.id}\n\t{woof.url}')
         tname = get_tname(woof.url)
         assert db.table_exists(tname) #ensure that the table exists in the woofdb
-        #get the earliest sequence number from woofplot woof.id
-        earliest_seqno = db_session.query(func.min(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
-        endsno = int(earliest_seqno)
-        #get 5 data elements and compute their time difference (sampling rate)
-        sample_data = db_session.query(WoofData.ts).filter(WoofData.woof_id == woof.id).order_by(WoofData.ts.desc()).limit(5).all()
-        count = diffsum = 0
-        for dt in sample_data:
-            count += 1
-            if count == 1:
-                lastdt = dt[0]
-                continue
-            diff = lastdt-dt[0]
-            assert diff.total_seconds() >= 0
-            diffsum += diff.total_seconds()
-            lastdt = dt[0]
-        avg_sec_diff = diffsum/(count-1)
-        measurements_per_day = int(86400/avg_sec_diff)
-        total_samples = measurements_per_day * 365 #samples taken in a year
-        startsno = endsno - total_samples
-        if startsno < 0:
-            startsno = measurements_per_day * 3 #start 3 days from sensor instantiation
+        #get the earliest sequence number from woofplot woof.id and work forward
+        startsno = db_session.query(func.min(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
+        endsno = db_session.query(func.max(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
 
-        #first check if we've already done this (and crashed out due to an error)
-        PROCESSIT = True
-        snpair = None
-        if woof.url in done_dict:
-            snpair = done_dict[woof.url]
-            PROCESSIT = False
-        if snpair is not None:
-            start = int(snpair[0])
-            end = int(snpair[1])
-            #check that we have all of the seqnos
-            donecount = db_session.query(func.count(WoofData.id))\
-                .filter(WoofData.woof_id == woof.id)\
-                .filter(WoofData.seqno.between(start, end))\
-                .scalar()
-            if donecount < (end-start):
-                PROCESSIT = True
-
-        if PROCESSIT:
-            print(f'processing {woof.url} donecount: {donecount} vs {end-start}')
-            with open(outfile, "a") as f:
-                f.write(f"{woof.id}:{woof.url}:{tname}:{startsno}:{endsno}\n")
-            retn = get_woofdb_data(tname, startsno, endsno) #seqno, dt, data
-            if DEBUG:
-                print(f'\tavg_sec_diff: {int(avg_sec_diff)}, count: {count}, measperday: {measurements_per_day}, total_samples: {total_samples}')
-                print(f'\tsql query: {startsno} - {endsno}')
-                print(f'\tadding to woofplot DB; len: {len(retn)}, first ele: {retn[0]}')
-            for ele in retn:
-                exists = db_session.query(WoofData).filter_by(woof_id=woof.id, ts=ele[1]).first()
-
-                if not exists:
-                    woofdata = WoofData(
-                        seqno = ele[0],
-                        ts = ele[1],
-                        data = ele[2],
-                        woof=woof
-                    )
-                    db_session.add(woofdata)
-                    db_session.commit()
-                    db_session.expunge(woofdata)
+        if DEBUG: 
+            print(f'processing {woof.url} startseqno: {startsno} endseqno: {endsno}',flush=True)
+        retn = get_woofdb_data(tname, startsno, endsno) #seqno, dt, data
+        for ele in retn:
+            exists = db_session.query(WoofData).filter_by(woof_id=woof.id, ts=ele[1]).first()
+            if not exists:
+                if DEBUG: 
+                    print(f'ADDING {ele}')
+                woofdata = WoofData(
+                    seqno = ele[0],
+                    ts = ele[1],
+                    data = ele[2],
+                    woof=woof
+                )
+                db_session.add(woofdata)
+                db_session.commit()
+                db_session.expunge(woofdata)
 
 ######################################
 if __name__ == "__main__":
