@@ -78,7 +78,7 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
         if retn_len == 0:
             #no results
             retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
-            return retn,500
+            return [],200
         tdiff = rand_rows[0].ts - startdt
         if DEBUG:
             print(f"query ts returned: {rand_rows[0].ts} -- {rand_rows[retn_len-1].ts}, eles: {retn_len} tdiff: {tdiff.days}",flush=True) 
