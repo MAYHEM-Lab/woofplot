@@ -44,6 +44,7 @@ def decimate(lst, target_count):
 
 ################
 def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecond timestamps s and e
+    # called by routes.py /api/query/ GET
     start = s/1000 #convert the millisecond values to seconds
     startdt = datetime.fromtimestamp(start,tz=PacTZ)
     end = e/1000
@@ -77,7 +78,7 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
             run_jobs(woofId,count_to_return) #calls load_woof on earliest seqno and loads
         if retn_len == 0:
             #no results
-            retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
+            retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}  CTR={count_to_return}"}
             return retn,500
         tdiff = rand_rows[0].ts - startdt
         if DEBUG:
@@ -399,13 +400,14 @@ def add_users_in_list_to_db(ulist):
         add_user_to_db(tpl[0],tpl[1],tpl[2])
 
 ################
-def run_jobs(woofurl,limit=JOB_LIMIT):
+def call_run_jobs(woofurl,limit=JOB_LIMIT):
     wid = get_woof_id_from_url(woofurl)
     run_jobs(wid,limit,woofurl)
 
 ################
 def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
-    #run background job to load woof entries ahead of the earliest sequence number
+    # run background job to load woof entries ahead of the earliest sequence number
+    # called by get_woof_values (routes.py /api/query/ GET), get_all_woofs_from_db (routes.py:/api/woof/ GET)
     try:
         woofurl = wurl
         if wurl == None:
@@ -416,20 +418,20 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
             queue.enqueue(tasks.woof_load_task, woofurl, -1, SMALL_JOB) #calls load_woof(woofurl,-1,SMALL_JOB)
         else:
             earliest_seqno = get_earliest_seqno_from_woofId(woofId) #esno in database
-            esno = earliest_seqno - limit
-            if esno < 1: #handle case where we are near the start of a woof
-                esno = 1
-                limit = earliest_seqno - 1
-                if esno < limit:
-                    queue.enqueue(tasks.woof_load_task, woofurl, esno, limit) #calls load_woof
-            elif limit > JOB_LIMIT:
-                lim = limit
-                while lim > 0: #run multiple jobs with different esno's
-                    queue.enqueue(tasks.woof_load_task, woofurl, esno, JOB_LIMIT) #load_woof
-                    esno = esno - JOB_LIMIT
-                    lim = lim - JOB_LIMIT
-            else:
-                queue.enqueue(tasks.woof_load_task, woofurl, esno, limit) #calls load_woof
+            #handle case where we are near the start of a woof
+            # if earliest - limit is negative, then don't load anything (we are at/near start)
+            startsno = earliest_seqno - limit
+            if startsno > 10: #make the load worth our while (we load at least 10 entries)
+                if limit > JOB_LIMIT:
+                    lim = limit
+                    while lim > 0: #run multiple jobs with different startsnos
+                        queue.enqueue(tasks.woof_load_task, woofurl, startsno, JOB_LIMIT) #load_woof
+                        startsno = startsno - JOB_LIMIT
+                        if startsno < 10: #nearing the first element in the woof, don't bother loading
+                            break
+                        lim = lim - JOB_LIMIT
+                else:
+                    queue.enqueue(tasks.woof_load_task, woofurl, startsno, limit) #calls load_woof
     except Exception as e:
         print(f"Exception in run_jobs: {e}")
 
@@ -438,11 +440,17 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
     # Call senspot_get and put the data in the DB
     # Do this for cspot seqnos between startsn and endsn-1 inclusively (or latest if endsn=-1)
     # Returns the cspot return associated with the largest seqno retreived (latest if endsn=-1) or None on err
+    # Called by: utils.py:run_jobs(woofId,count_to_return,wurl) --> queue.enqueue(...)
+    # Called by: tasks.py as a background job
 
     #Cases:
     #   new woof (only pass in url), add count eles ending in the latest_seqno, add this seqno to the woof
     #   existing woof (only pass in url), add eles up to the latest_seq_no recorded in the woof
     #   seqno range 
+
+    # CJK problem
+    #load_woof: woof://169.231.230.76/sharedfs/unl-data/daviscupsout, 1, 21: 8322
+        #load_woof problem: woofid: 3 startsn -20 endsn 1
     woof = get_woof_from_db(woofurl) #adds it if not there
     latest = woof.latest_seq_no
     print(f"load_woof: {woofurl}, {endsn}, {count}: {latest}")

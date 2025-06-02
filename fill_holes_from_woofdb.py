@@ -144,6 +144,10 @@ def main():
         print(f'processing woof: {woof.id}\n\t{woof.url}')
         tname = get_tname(woof.url)
         assert db.table_exists(tname) #ensure that the table exists in the woofdb
+        if not db.table_exists(tname): #ensure that the table exists in the woofdb
+            print(f'\ttname {tname} does not exist in db, skipping...')
+            continue
+
         #get the earliest sequence number from woofplot woof.id and work forward
         startsno = db_session.query(func.min(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
         endsno = db_session.query(func.max(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
