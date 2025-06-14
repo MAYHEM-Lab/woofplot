@@ -55,6 +55,8 @@ python -m venv woofplotenv
 source woofplotenv/bin/activate
 pip install --upgrade pip
 pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2-binary sqlalchemy_orm pytz python-dotenv requests
+#if you are using an older distro -- you need to upgrade flask:
+pip install --upgrade Flask
 deactivate
 
 cd ui
