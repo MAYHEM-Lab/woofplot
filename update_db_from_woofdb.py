@@ -185,6 +185,7 @@ def main():
         #first check if we've already done this (and crashed out due to an error)
         PROCESSIT = True
         snpair = None
+        donecount = end = start = 0
         if woof.url in done_dict:
             snpair = done_dict[woof.url]
             PROCESSIT = False
