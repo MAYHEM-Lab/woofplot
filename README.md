@@ -6,6 +6,9 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 ## Fast Start
 * Use the **pre-made docker container** (Ubuntu 24.04), via these [these instructions](https://docs.google.com/document/d/1nIc00qmNRd9zsD2ApW7BYlDljN3qI2IlRiTh67xi3pM).
 
+## Running WoofPlot on Woofs for the First Time
+When you configure WoofPlot to use a new woof and then plot its data for the first time (or after not visualizing its data in awhile), the system will load the data using background threads.  The initial press of the Plot button will return no data (and not display anything).  **Press the Plot button repeatedly** to see the data as it is loaded by the threads.  You can also start by plotting the most recent data first and shorter periods of time (e.g. 6 hours or 1 week versus 1 year) to reduce the latency of this process.
+
 ## Requirements (for non-docker-container installation)
 * [python3 as python](https://www.python.org/downloads/)
 * [yarn](https://classic.yarnpkg.com/en/docs/install)
@@ -55,6 +58,8 @@ python -m venv woofplotenv
 source woofplotenv/bin/activate
 pip install --upgrade pip
 pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2-binary sqlalchemy_orm pytz python-dotenv requests
+#if you are using an older distro -- you need to upgrade flask:
+pip install --upgrade Flask
 deactivate
 
 cd ui
