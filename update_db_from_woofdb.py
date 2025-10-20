@@ -214,7 +214,7 @@ def main():
                 print(f'\tadding to woofplot DB; len: {len(retn)}')
                 if len(retn) > 0:
                     print(f'first ele: {retn[0]}')
-            assert endsno <= startsno
+            assert endsno >= startsno
             for ele in retn:
                 exists = db_session.query(WoofData).filter_by(woof_id=woof.id, ts=ele[1]).first()
 
