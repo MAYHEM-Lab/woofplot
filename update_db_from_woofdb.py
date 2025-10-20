@@ -159,7 +159,10 @@ def main():
     for woof in woofs:
         print(woof.id, woof.url)
         tname = get_tname(woof.url)
-        assert db.table_exists(tname) #ensure that the table exists in the woofdb
+        if not db.table_exists(tname): #ensure that the table exists in the woofdb
+            print(f"{tname} NOT FOUND IN DB! skipping...")
+            continue
+
         #get the earliest sequence number from woofplot woof.id
         earliest_seqno = db_session.query(func.min(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
         endsno = int(earliest_seqno)
@@ -208,7 +211,10 @@ def main():
             if DEBUG:
                 print(f'\tavg_sec_diff: {int(avg_sec_diff)}, count: {count}, measperday: {measurements_per_day}, total_samples: {total_samples}')
                 print(f'\tsql query: {startsno} - {endsno}')
-                print(f'\tadding to woofplot DB; len: {len(retn)}, first ele: {retn[0]}')
+                print(f'\tadding to woofplot DB; len: {len(retn)}')
+                if len(retn) > 0:
+                    print(f'first ele: {retn[0]}')
+            assert endsno <= startsno
             for ele in retn:
                 exists = db_session.query(WoofData).filter_by(woof_id=woof.id, ts=ele[1]).first()
 

@@ -141,9 +141,9 @@ def main():
     #db_sessionis the woofplot database
     woofs = db_session.query(Woofs).all()
     for woof in woofs:
-        print(f'processing woof: {woof.id}\n\t{woof.url}')
         tname = get_tname(woof.url)
-        assert db.table_exists(tname) #ensure that the table exists in the woofdb
+        print(f'processing woof: {woof.id}\n\t{woof.url} and tname: {tname}')
+        #assert db.table_exists(tname) #ensure that the table exists in the woofdb
         if not db.table_exists(tname): #ensure that the table exists in the woofdb
             print(f'\ttname {tname} does not exist in db, skipping...')
             continue
