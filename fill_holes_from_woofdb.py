@@ -10,9 +10,17 @@ from datetime import datetime, timedelta
 sys.path.append(os.path.join(os.path.dirname(__file__), '../sensor_data_tools', 'DB'))
 import dbiface
 
+from math import ceil
 from sqlalchemy import create_engine
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func, and_
 from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.orm import load_only
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from contextlib import contextmanager
+from sqlalchemy import func, text
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from psycopg2.extras import execute_values
 
 dotenv.load_dotenv()
 tmp = os.environ.get("WPDEBUG")
@@ -37,6 +45,91 @@ from models import Base, Woofs, WoofData
 
 #woofdb db
 db = None
+
+######################################
+
+CHUNK_SIZE  = 5_000   # seqno window; tune down if rows are big
+SUB_BATCH   = 1_000   # rows per INSERT ... VALUES (...),(...)
+
+@contextmanager
+def new_session_like(db_session):
+    """Create a short-lived session bound to the same engine as db_session."""
+    engine = db_session.get_bind()
+    Session = sessionmaker(bind=engine, future=True)
+    s = Session()
+    try:
+        yield s
+    finally:
+        s.close()
+
+def batched(iterable, n):
+    batch = []
+    for item in iterable:
+        batch.append(item)
+        if len(batch) >= n:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+def process_woof(db_session, woof, tname, DEBUG=False):
+    # NOTE: these queries open a transaction on db_session; we'll end it right after.
+    startsno = db_session.query(func.min(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
+    endsno   = db_session.query(func.max(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
+
+    if startsno is None or endsno is None:
+        if DEBUG:
+            print(f'No data to process for {woof.url}')
+        return
+
+    if DEBUG:
+        print(f'processing {woof.url} startseqno: {startsno} endseqno: {endsno}', flush=True)
+
+    # End the read txn before starting our write windows
+    db_session.commit()
+
+    total_chunks = ceil((endsno - startsno + 1) / CHUNK_SIZE)
+
+    # Prepared INSERT with ON CONFLICT; we’ll feed values via psycopg2.execute_values
+    # (This path avoids creating ORM instances and minimizes Python overhead.)
+    insert_sql = """
+        INSERT INTO woofdata (seqno, ts, data, woof_id)
+        VALUES %s
+        ON CONFLICT (woof_id, ts) DO NOTHING
+    """
+
+    for idx, chunk_start in enumerate(range(startsno, endsno + 1, CHUNK_SIZE), start=1):
+        chunk_end = min(chunk_start + CHUNK_SIZE - 1, endsno)
+        if DEBUG:
+            print(f'[{idx}/{total_chunks}] seqno chunk: {chunk_start}–{chunk_end}', flush=True)
+
+        # IMPORTANT: make sure get_woofdb_data returns an *iterator/generator* (not a giant list).
+        # If it currently returns a list, you can still iterate and sub-batch below, but consider
+        # changing it to yield rows to reduce peak memory.
+        rows_iter = get_woofdb_data(tname, chunk_start, chunk_end)  # yields (seqno, ts, data)
+
+        # Use a short-lived session/connection per window to keep memory flat.
+        with new_session_like(db_session) as s:
+            # Raw psycopg2 connection underneath SQLAlchemy connection
+            conn = s.connection().connection
+            with conn.cursor() as cur:
+                inserted = 0
+                for sub in batched(rows_iter, SUB_BATCH):
+                    # Transform to sequence of tuples matching VALUES %s
+                    values = [(seq, ts, data, woof.id) for (seq, ts, data) in sub]
+                    if not values:
+                        continue
+                    # execute_values constructs a single INSERT ... VALUES (...),(...),... statement
+                    # which is both fast and memory-friendly for medium batches
+                    execute_values(cur, insert_sql, values, page_size=len(values))
+                    inserted += len(values)
+                conn.commit()
+
+        if DEBUG:
+            print(f'   committed chunk {chunk_start}–{chunk_end}', flush=True)
+
+    if DEBUG:
+        print('Done.', flush=True)
 
 ######################################
 def get_wweather(startsno,endsno): #returns list of entries to write
@@ -148,6 +241,8 @@ def main():
             print(f'\ttname {tname} does not exist in db, skipping...')
             continue
 
+        process_woof(db_session, woof, tname)
+'''old code
         #get the earliest sequence number from woofplot woof.id and work forward
         startsno = db_session.query(func.min(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
         endsno = db_session.query(func.max(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
@@ -172,6 +267,7 @@ def main():
                 db_session.commit()
                 db_session.expunge(woofdata)
         print(f'Added {count} out of {len(retn)}')
+'''
 
 ######################################
 if __name__ == "__main__":
