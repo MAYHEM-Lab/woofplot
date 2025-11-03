@@ -74,7 +74,7 @@ def getwoofs():
         #spawn job in background to load the woof -- do the full JOB_LIMIT since user is working on adding columns
         if DEBUG:
             print(f'calling run_jobs from /apt/woof POST for {data["url"]}')
-        utils.call_run_jobs(data["url"], seqno)
+        utils.call_run_jobs(data["url"])
 
         return jsonify({}), 201
     return jsonify({f"WOOFPLOT": "/api/woof/ unknown method error {request.method}"}), 405

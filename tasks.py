@@ -1,15 +1,36 @@
 from datetime import datetime, timedelta
 import utils
 from rq import get_current_job
+from redis_config import redis_conn
 
 #start redis: redis-server 
 #start workers via python rq worker &
 #place job on queue via: from tasks import woof_load_task; ...job = queue.enqueue(woof_load_task, url, seqno)
 
-def woof_load_task(url, seqno, count):
+def woof_load_task(url, seqno, count, *, woof_id=None, latest=None):
     job = get_current_job()
-    taskId = job.id
-    print(f"worker {taskId} loading {url} is starting at {datetime.now()}",flush=True)
-    utils.load_woof(url,seqno,count)
-    print(f"worker {taskId} loading {url} is done at {datetime.now()}",flush=True)
+    dedupe_key = None
+    if seqno == -1:
+        assert latest
+        dedupe_key = f"woofload:dedupe:{woof_id}:{latest}:{count}" if woof_id is not None else None
+    else:
+        dedupe_key = f"woofload:dedupe:{woof_id}:{seqno}:{count}" if woof_id is not None else None
+    print(f"woof_load_task [{job.id}] loading {url} start={seqno} count={count} latest={latest} dedupe={dedupe_key} at {datetime.now()}", flush=True)
+        
 
+    try:
+        # This is the idempotent loader (check for seqno's before requesting/adding)
+        err = utils.load_woof(url, seqno, count)
+        if err is None: 
+            print(f"PROBLEM in background load_woof task: [{job.id}] {url} {seqno} {count}", flush=True)
+        else:
+            pass
+            # success → allow immediate re-enqueue
+            #if dedupe_key:
+                #redis_conn.delete(dedupe_key)
+        print(f"[{job.id}] done {url} at {datetime.now()}", flush=True)
+    except Exception as e:
+        # On failure, keep the dedupe key; the TTL prevents instant duplicate enqueues
+        # (We can also log or move job to a retry queue here.)
+        print(f"[{job.id}] error: {e}", flush=True)
+        raise
