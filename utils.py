@@ -3,20 +3,21 @@
     Author: Chandra Krintz, 
     License: UCSB BSD -- see LICENSE file in this repository
 '''
-import traceback, sys, argparse, os, json, pytz
+import traceback, sys, argparse, os, json, pytz, math
 from datetime import datetime, timedelta, timezone
 from passlib.hash import sha256_crypt
-from sqlalchemy.sql import func
-from sqlalchemy import UniqueConstraint, and_
+from sqlalchemy.sql import over
+from sqlalchemy import UniqueConstraint, and_, func
 from sqlalchemy.schema import DropTable
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, Session
+
 from db import db_session
 from models import Users, Woofs, Columns, WoofData
 import time, random
 import db, cspot_utils, tasks
 from redis import Redis
-from redis_config import queue
+from redis_config import queue, redis_conn
 MAX_WOOF_ELES = 10000 #typical number of entries in a woof
 JOB_LIMIT = 200
 SMALL_JOB = 20
@@ -35,6 +36,128 @@ secsmap = {
     "moment": -1
 }
 PacTZ = pytz.timezone('US/Pacific')
+DEDUP_TTL_SECONDS = 24 * 3600  # should exceed worst-case job runtime (24 hrs)
+
+################
+def find_missing_ranges(woof_id: int, start_seq: int):
+    # window: previous seqno per woof, ordered by seqno
+    prev_seq = func.lag(WoofData.seqno).over(
+        partition_by=WoofData.woof_id,
+        order_by=WoofData.seqno,
+    )
+
+    # subquery: only rows for this woof_id at/after start_seq
+    subq = (
+        db_session.query(
+            WoofData.seqno.label("seqno"),
+            prev_seq.label("prev_seq"),
+        )
+        .filter(
+            and_(
+                WoofData.woof_id == woof_id,
+                WoofData.seqno >= start_seq,
+            )
+        )
+        .subquery()
+    )
+
+    # internal gaps (where current seqno is more than 1 greater than previous)
+    rows = (
+        db_session.query(
+            (subq.c.prev_seq + 1).label("gap_start"),
+            (subq.c.seqno - 1).label("gap_end"),
+        )
+        .filter(
+            subq.c.prev_seq.isnot(None),
+            subq.c.seqno > subq.c.prev_seq + 1,
+        )
+        .order_by(subq.c.prev_seq)
+        .all()
+    )
+
+    gaps = []
+
+    # check if there's an initial gap from start_seq to the first actual seqno we have
+    first_seq = (
+        db_session.query(WoofData.seqno)
+        .filter(
+            and_(
+                WoofData.woof_id == woof_id,
+                WoofData.seqno >= start_seq,
+            )
+        )
+        .order_by(WoofData.seqno)
+        .limit(1)
+        .scalar()
+    )
+    if first_seq is not None and first_seq > start_seq:
+        gaps.append((start_seq, first_seq - 1))
+
+    # add the internal gaps
+    gaps.extend((int(a), int(b)) for a, b in rows)
+
+    return gaps
+
+################
+def split_ranges(ranges, max_span: int):
+    out = []
+    for a, b in ranges:
+        x = a
+        while x <= b:
+            y = min(x + max_span - 1, b)
+            out.append((x, y))
+            x = y + 1
+    return out
+
+################
+def split_ranges_desc(ranges, max_span: int):
+    out = []
+    for a, b in ranges:
+        # walk this gap from high → low
+        x = b
+        while x >= a:
+            y = max(a, x - max_span + 1)
+            out.append((y, x))
+            x = y - 1
+    return out
+
+################
+def enqueue_woof_load_jobs(woof_id: int, woofurl: str, cspot_seqno: int, *, chunk_size: int = JOB_LIMIT):
+    startsn = cspot_seqno - 9000 #assuming a 10K buffer for most
+    if startsn < 10:
+        startsn = 10
+    gaps = find_missing_ranges(woof_id,startsn)
+    #process more recent gaps first
+    gaps.sort(key=lambda r: r[1], reverse=True)
+    jobs = split_ranges_desc(gaps, chunk_size)
+
+    enqueued = 0
+    for start, end in jobs:
+        count = end - start + 1
+        dedupe_key = f"woofload:dedupe:{woof_id}:{start}:{count}"
+        # Reserve atomically; skip if already reserved/enqueued/running recently
+        if not redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS):
+            continue
+
+        # Let RQ assign a fresh job_id so we can immediately re-enqueue later
+        try:
+            queue.enqueue(
+                tasks.woof_load_task,
+                args=(woofurl, start, count),
+                kwargs={"woof_id": woof_id},
+                result_ttl=3600,
+                failure_ttl=86400,
+            )
+            enqueued += 1
+        except Exception:
+            # If enqueue fails, release reservation so it can be retried
+            print(f"Enqueue failure woof_id={woof_id}",flush=True)
+            redis_conn.delete(dedupe_key)
+            raise
+
+    if DEBUG:
+        print(f"Enqueued {enqueued} jobs for woof_id={woof_id}",flush=True)
+    return enqueued
 
 ################
 def decimate(lst, target_count):
@@ -56,15 +179,21 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
         count_to_return = int(raw)
     else:
         count_to_return = int(timediff/div)
+    #count_to_return is the resulting decimated count, DB will likely return more
+
     woofvals = []
     responses = []
     if DEBUG:
         print(f'get_woof_values: {woofId}, {field}, {s}:{start}:{startdt}')
-        print(f'{agg}, {interval}, {e}:{end}:{enddt}, {raw}')
+        print(f'\t{agg}, {interval}, {e}:{end}:{enddt}, {raw}')
+        print(f'\tcount to return: {count_to_return}',flush=True)
     try:
-        #get the results from the db - decimate them randomly to return only the count_to_return
-        #if there are fewer rows it will return all of them, note that we have to re-sort them as they
-        #are returned randomly from the query. 
+        wurl = get_woof_url_from_id(woofId)
+        #err = load_woof(wurl) #load the 20 most recent (if delay is too long, change limit)
+        #assert err is not None
+
+        # now get the results from the db and decimate them randomly to return only 
+        # the count_to_return if there are fewer rows it will return all of them
         #attributes: id, ts, seqno, data
         rand_rows = db_session.query(WoofData).filter(  
             and_(
@@ -73,25 +202,41 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
                 WoofData.ts <= enddt
             ) #).order_by(func.random()).limit(count_to_return).all()
         ).order_by(WoofData.ts).all()
-        retn_len = len(rand_rows)
-        if retn_len < count_to_return:
-            run_jobs(woofId,count_to_return) #calls load_woof on earliest seqno and loads
+        retn_len = len(rand_rows) 
         if retn_len == 0:
             #no results
+            if DEBUG:
+                print(f'\treturning from get_woof_values -- no results found',flush=True)
             retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
             return [],200
-        tdiff = rand_rows[0].ts - startdt
+        first_woof_ts = rand_rows[0].ts
+        first_woof_seqno = rand_rows[0].seqno
+        last_woof_seqno = rand_rows[-1].seqno
+        tdiff = first_woof_ts - startdt
         if DEBUG:
-            print(f"query ts returned: {rand_rows[0].ts} -- {rand_rows[retn_len-1].ts}, eles: {retn_len} tdiff: {tdiff.days}",flush=True) 
+            print(f"\tquery startdt: {startdt} and enddt: {enddt} -- count_to_return: {count_to_return} -- timediff: {tdiff} {tdiff.total_seconds()/60}",flush=True)
+            print(f"\tquery ts returned: {rand_rows[0].ts} -- {rand_rows[retn_len-1].ts}, eles: {retn_len} tdiff: {tdiff.days}",flush=True) 
 
         #keep the first and last from rand_rows
         results = []
         results.append(rand_rows[0])
-        templist = decimate(rand_rows[1:-1], count_to_return)
+        dec_val = os.environ.get("DECIMATE_SKIP")
+        if dec_val is not None:
+            dec_val = int(dec_val)
+        else:
+            dec_val = 250
+        if retn_len > dec_val:
+            if DEBUG:
+                print(f"\tDECIMATING... using val {dec_val}",flush=True)
+            templist = decimate(rand_rows[1:-1], count_to_return)
+        else: 
+            templist = rand_rows[1:-1]
         results.extend(templist)
         results.append(rand_rows[-1])
 
         #process results for returning
+        if DEBUG:
+            print(f"\tprocessing results {len(results)}",flush=True)
         TYP = None
         for result in results:
             response = {}  #woofId, field, ts, val
@@ -117,10 +262,10 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
             responses.append(response)
 
         if DEBUG:
-            print(f"getting entry for woofID {woofId}: {len(responses)} responses")
+            print(f"RETURNING: getting entry for woofId {woofId}: {len(responses)} responses",flush=True)
 
     except Exception as e:
-        print(f"Exception in get_woof_values: {e}")
+        print(f"Exception in get_woof_values: {e}",flush=True)
         traceback.print_exc()
         retn = {f"WOOFPLOT": "get_woof_values exception {e}"}
         return retn,500
@@ -202,7 +347,7 @@ def add_or_update_woof_in_db(data,seqno = -1):
 
         db_session.commit()
     except Exception as e:
-        print(f"Exception in add_or_update_woof_in_db: {e}")
+        print(f"Exception in add_or_update_woof_in_db: {e}",flush=True)
         traceback.print_exc()
     return woof
 
@@ -224,7 +369,7 @@ def add_user_to_db(uname,pwd,isAdmin,roles=None):
         else:
             print("add_user_to_db: user already in DB with ID: {}".format(obj.id))
     except Exception as e:
-        print("Exception in add_user_to_db: {}".format(e))
+        print(f"Exception in add_user_to_db: {e}", flush=True)
         traceback.print_exc()
     return obj
 
@@ -241,7 +386,7 @@ def update_user_pwd(uname,pwd):
         else:
             print(f"update_user_pwd: user not found in DB: {unane}")
     except Exception as e:
-        print(f"Exception in update_user_pwd: {e}")
+        print(f"Exception in update_user_pwd: {e}", flush=True)
         traceback.print_exc()
     return False
 
@@ -265,7 +410,12 @@ def get_latest_seqno_from_woofId(id):
 
 ################
 def get_earliest_seqno_from_woofId(woof_id):
-    return db_session.query(func.min(WoofData.seqno)).filter(WoofData.woof_id == woof_id).scalar()
+    min_seq = (
+        db_session.query(func.min(WoofData.seqno))
+        .filter(WoofData.woof_id == woof_id)
+        .scalar()
+    ) or -1
+    return min_seq
 
 ################
 def get_woof_url_from_id(id):
@@ -300,7 +450,7 @@ def convert(val, conversion):
         floatval = float(val)
     except Exception as e:
         if DEBUG:
-            print(f"Exception in convert: {e}\n{val}, {conversion}")
+            print(f"Exception in convert: {e}\n{val}, {conversion}",flush=True)
         return val
     if conversion == "c2f":
         f = floatval*1.8 + 32
@@ -326,7 +476,7 @@ def convert(val, conversion):
 def get_all_woof_entries(woofurl):
     woof = get_woof_from_db(woofurl)
     if DEBUG:
-        print(f"get_all_woof_entries {woof}")
+        print(f"get_all_woof_entries {woof}",flush=True)
     return woof.woofdata
 
 ################
@@ -413,11 +563,42 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
         if wurl == None:
             woofurl = get_woof_url_from_id(woofId)
         if DEBUG:
-            print(f"run_jobs: running background jobs for {woofurl}, limit: {limit}")
+            print(f"run_jobs: setting up background job for {woofurl} {woofId}, limit: {limit}",flush=True)
         if limit == -1: #just call load_woof which loads a small number of the most recent entries
-            queue.enqueue(tasks.woof_load_task, woofurl, -1, SMALL_JOB) #calls load_woof(woofurl,-1,SMALL_JOB)
+            #create a unique job ID so that we don't keep running this if we've already enqueued it
+            latest = None
+            res,OK = cspot_get(woofurl)
+            if  OK:
+                latest = int(res[5])
+            dedupe_key = f"woofload:dedupe:{woofId}:{latest}:{SMALL_JOB}"
+            #returns True if we get the reservation and should enqueue (else None)
+            v = redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS)
+            if DEBUG:
+                print(f"run_jobs2: {woofurl} {woofId}, limit: {limit} latest: {latest}",flush=True)
+                print(f"\tdedupe_key: {dedupe_key}")
+            # Reserve atomically; skip if already reserved/enqueued/running recently
+            if v == True:
+                try:
+                    queue.enqueue(tasks.woof_load_task, 
+                        args=(woofurl, -1, SMALL_JOB), 
+                        kwargs={"woof_id": woofId, "latest": latest},
+                    )
+                    #calls load_woof(woofurl,-1,SMALL_JOB)
+                except Exception:
+                    # If enqueue fails, release reservation so it can be retried
+                    print(f"Enqueue0 failure woof_id={woof_id}",flush=True)
+                    redis_conn.delete(dedupe_key)
+                    raise
+
+            if latest:
+                #now create more jobs that fill in the holes in the DB
+                enqueue_woof_load_jobs(woofId, woofurl, latest)
+
         else:
+            if DEBUG:
+                print(f"run_jobs3: {woofurl} {woofId}, limit: {limit}",flush=True)
             earliest_seqno = get_earliest_seqno_from_woofId(woofId) #esno in database
+            assert earliest_seqno != -1  #this should never happen
             #handle case where we are near the start of a woof
             # if earliest - limit is negative, then don't load anything (we are at/near start)
             startsno = earliest_seqno - limit
@@ -425,18 +606,50 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
                 if limit > JOB_LIMIT:
                     lim = limit
                     while lim > 0: #run multiple jobs with different startsnos
-                        queue.enqueue(tasks.woof_load_task, woofurl, startsno, JOB_LIMIT) #load_woof
+                        dedupe_key = f"woofload:dedupe:{woofId}:{startsno}:{JOB_LIMIT}"
+                        if DEBUG:
+                            print(f"\tdedupe_key: {dedupe_key}")
+                        # Reserve atomically; skip if already reserved/enqueued/running recently
+                        if redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS):
+                            try:
+                                queue.enqueue(tasks.woof_load_task, 
+                                    args=(woofurl, startsno, JOB_LIMIT), 
+                                    kwargs={"woof_id": woofId},
+                                )
+                                #calls load_woof(woofurl,startsno,JOB_LIMIT)
+                            except Exception:
+                                # If enqueue fails, release reservation so it can be retried
+                                print(f"Enqueue1 failure woof_id={woof_id}",flush=True)
+                                redis_conn.delete(dedupe_key)
+                                raise
                         startsno = startsno - JOB_LIMIT
                         if startsno < 10: #nearing the first element in the woof, don't bother loading
                             break
                         lim = lim - JOB_LIMIT
                 else:
-                    queue.enqueue(tasks.woof_load_task, woofurl, startsno, limit) #calls load_woof
+                    dedupe_key = f"woofload:dedupe:{woofId}:{startsno}:{limit}"
+                    if DEBUG:
+                        print(f"\tdedupe_key: {dedupe_key}")
+                    # Reserve atomically; skip if already reserved/enqueued/running recently
+                    if redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS):
+                        try:
+                            queue.enqueue(tasks.woof_load_task, 
+                                args=(woofurl, startsno, limit), 
+                                kwargs={"woof_id": woofId},
+                            )
+                            #calls load_woof(woofurl,startsno,limit)
+                        except Exception:
+                            # If enqueue fails, release reservation so it can be retried
+                            print(f"Enqueue2 failure woof_id={woof_id}",flush=True)
+                            redis_conn.delete(dedupe_key)
+                            raise
+            else:
+                print(f"WARNING: Not loading from start of woof for {woof_id}:{startsno}:{limit}",flush=True)
     except Exception as e:
-        print(f"Exception in run_jobs: {e}")
+        print(f"Exception in run_jobs: {e}",flush=True)
 
 ################
-def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to prevent bg job death/delays
+def load_woof(woofurl,endsn=-1,count=SMALL_JOB): # limit the number loaded (count) to prevent bg job death/delays
     # Call senspot_get and put the data in the DB
     # Do this for cspot seqnos between startsn and endsn-1 inclusively (or latest if endsn=-1)
     # Returns the cspot return associated with the largest seqno retreived (latest if endsn=-1) or None on err
@@ -445,7 +658,7 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
 
     #Cases:
     #   new woof (only pass in url), add count eles ending in the latest_seqno, add this seqno to the woof
-    #   existing woof (only pass in url), add eles up to the latest_seq_no recorded in the woof
+    #   existing woof (only pass in url), add eles from DB end/latest up to the latest_seq_no recorded in the woof
     #   seqno range 
 
     # CJK problem
@@ -479,17 +692,17 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
 
         woof.latest_seq_no = endsn #update the database to match wooflatest which we are about to add
         db_session.commit() #commit right away in case there is a race to add data for some reason
-        if DEBUG: 
-            print(f"\tload_woof: updated endsn {endsn} startsn {startsn} woof-latest {endsn}")
         epoch = float(res[2])
         ts = datetime.fromtimestamp(epoch)
         retn = (ts,endsn,res[0]) #return the latest
         if endsn == startsn:
+            if DEBUG: 
+                print(f"\tload_woof: returning the latest {retn}",flush=True)
             return retn #ts, seqno, data for the last entry in the DB
 
         #add the latest woof to the db, its not there if we reached here
         if DEBUG:
-            print(f'adding latest woofdata {ts}:{endsn}:{res[0]}')
+            print(f'adding latest woofdata {ts}:{endsn}:{res[0]}',flush=True)
         woofdata = WoofData(
             ts = ts,
             seqno = endsn,
@@ -499,14 +712,13 @@ def load_woof(woofurl,endsn=-1, count=20): # limit the number loaded (count) to 
         db_session.add(woofdata)
         db_session.commit()
 
-    else: #valid endsn was passed in, get the startsn
-        assert latest != -1
+    else: #valid endsn was passed in, get the startsn, load seqno range (startsn to endsn)
+        assert latest != -1 #sanity check that this isn't a new woof, this is latest_seqno in DB
         startsn = int(endsn-count)
-
     if startsn <= 0: 
-        print(f"\tload_woof problem: woofid: {woof.id} startsn {startsn} endsn {endsn}",flush=True)
-        assert False #assert startsn > 0
-    assert startsn != endsn #retn is not set here so returning None below (fix this!)
+        print(f"\tload_woof problem: woofid: {woof.id} startsn {startsn} endsn {endsn}, count: {count}",flush=True)  #we could just return None at this point...
+        #assert False #assert startsn > 0
+        return None
 
     #load the missing data into the database from the woof
     print(f"\tload_woof: loading missing data from startsn {startsn} to endsn {endsn}",flush=True)
@@ -616,7 +828,8 @@ def main():
         wid = get_woof_id_from_url(woofurl)
         print(f"TEST: loadwoof {woofurl}: id={wid}")
         woofmap[woofurl] = wid
-        load_woof(woofurl) #returns (ts, seqno, data)
+        val = load_woof(woofurl) #returns (ts, seqno, data)
+        assert val is not None
 
     if dumpwoofs:
         print(f"TEST: dumpwoofs")
@@ -638,6 +851,7 @@ def main():
         wid = woofmap[woofurl]
         latest_seqno = get_latest_seqno_from_woofId(wid)
         earliest_seqno = get_earliest_seqno_from_woofId(wid)
+        assert earliest_seqno != -1
         print(f"min: {earliest_seqno}, max: {latest_seqno}")
 
     if runjobs: 

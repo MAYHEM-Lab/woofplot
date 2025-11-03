@@ -155,11 +155,13 @@ def main():
         if DEBUG: 
             print(f'processing {woof.url} startseqno: {startsno} endseqno: {endsno}',flush=True)
         retn = get_woofdb_data(tname, startsno, endsno) #seqno, dt, data
+        count = 0
         for ele in retn:
             exists = db_session.query(WoofData).filter_by(woof_id=woof.id, ts=ele[1]).first()
             if not exists:
                 if DEBUG: 
                     print(f'ADDING {ele}')
+                count += 1
                 woofdata = WoofData(
                     seqno = ele[0],
                     ts = ele[1],
@@ -169,6 +171,7 @@ def main():
                 db_session.add(woofdata)
                 db_session.commit()
                 db_session.expunge(woofdata)
+        print(f'Added {count} out of {len(retn)}')
 
 ######################################
 if __name__ == "__main__":
