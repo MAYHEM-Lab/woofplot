@@ -149,13 +149,19 @@ def get_wu(tname,startsno,endsno): #returns list of entries to write
     rows = cur.fetchall()
     retn = []
     for row in rows:
+        #row = (296700.0, datetime.datetime(2025, 9, 30, 18, 50, 2, 879616), '172.31.19.53', '29.96:9:16:248:69:95:0.0:0.0:69:66:69:1:2025-09-30_18-50-00')
+        
+        '''
         #seqno, dt, ip, info, baro...dtmeas (13), epoch
         third = ':'.join(str(x) for x in row[4:-3])
         #update 2nd-to-last entry from 2024-03-19 05:34:09-07:00 to 2025-04-09_14-39-59
         dt = row[-2]
+        if DEBUG:
+            print(f'{row}\n\t{dt}, {third}')
         formatted = dt.strftime('%Y-%m-%d_%H-%M-%S')
         third = f'{third}:{formatted}'
-        retn.append((row[0],row[1],third))
+        '''
+        retn.append((row[0],row[1],row[3]))
     return retn
 
 ######################################

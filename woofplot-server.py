@@ -18,6 +18,7 @@ def main(port):
 
 if __name__ == '__main__':
     app = Flask(__name__,static_folder='./build',static_url_path='/')
+    app.url_map.strict_slashes = False
     ### CORS section
     '''If your frontend app is running on a different port or domain (e.g., if it's served using a different web server or directly from the filesystem), you might encounter a CORS (Cross-Origin Resource Sharing) issue. This fixes it.  pip install flask-cors; in the app: CORS(app) or use the following '''
     CORS(app)

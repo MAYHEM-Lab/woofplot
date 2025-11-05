@@ -130,6 +130,8 @@ def enqueue_woof_load_jobs(woof_id: int, woofurl: str, cspot_seqno: int, *, chun
     #process more recent gaps first
     gaps.sort(key=lambda r: r[1], reverse=True)
     jobs = split_ranges_desc(gaps, chunk_size)
+    if DEBUG:
+        print(f"enqueue_woof_load_jobs: checking range {startsn} - {cspot_seqno}, gaps: {len(gaps)}, jobs:{len(jobs)}",flush=True)
 
     enqueued = 0
     for start, end in jobs:
