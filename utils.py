@@ -122,6 +122,11 @@ def split_ranges_desc(ranges, max_span: int):
     return out
 
 ################
+def call_enqueue_woof_load_jobs(woof_id: int, woofurl: str, cspot_seqno: int):
+    #called from background job
+    enqueue_woof_load_jobs(woof_id, woofurl, cspot_seqno) #set chunk_size here if needed
+
+################
 def enqueue_woof_load_jobs(woof_id: int, woofurl: str, cspot_seqno: int, *, chunk_size: int = JOB_LIMIT):
     startsn = cspot_seqno - 9000 #assuming a 10K buffer for most
     if startsn < 10:
@@ -588,13 +593,28 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
                     #calls load_woof(woofurl,-1,SMALL_JOB)
                 except Exception:
                     # If enqueue fails, release reservation so it can be retried
-                    print(f"Enqueue0 failure woof_id={woof_id}",flush=True)
+                    print(f"Enqueue0 failure woof_id={woofId}",flush=True)
                     redis_conn.delete(dedupe_key)
                     raise
 
             if latest:
                 #now create more jobs that fill in the holes in the DB
-                enqueue_woof_load_jobs(woofId, woofurl, latest)
+                #create a background job to do it so that we don't hold up the frontend
+                dedupe_key = f"woofload:enqueue_jobs:dedupe:{woofId}:{latest}"
+                v = redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS)
+                if DEBUG:
+                    print(f"\tsetting up enqueue_jobs with key: {dedupe_key}", flush=True)
+                if v == True:
+                    try:
+                        queue.enqueue(tasks.call_enqueue_woof_load_jobs,
+                            args=(woofId, woofurl, latest),
+                        )
+                        #calls enqueue_woof_load_jobs(woofId, woofurl, latest)
+                    except Exception:
+                        # If enqueue fails, release reservation so it can be retried
+                        print(f"call_enqueue_jobs failure woof_id={woofId}",flush=True)
+                        redis_conn.delete(dedupe_key)
+                        raise
 
         else:
             if DEBUG:
@@ -621,7 +641,7 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
                                 #calls load_woof(woofurl,startsno,JOB_LIMIT)
                             except Exception:
                                 # If enqueue fails, release reservation so it can be retried
-                                print(f"Enqueue1 failure woof_id={woof_id}",flush=True)
+                                print(f"Enqueue1 failure woof_id={woofId}",flush=True)
                                 redis_conn.delete(dedupe_key)
                                 raise
                         startsno = startsno - JOB_LIMIT
@@ -642,11 +662,11 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
                             #calls load_woof(woofurl,startsno,limit)
                         except Exception:
                             # If enqueue fails, release reservation so it can be retried
-                            print(f"Enqueue2 failure woof_id={woof_id}",flush=True)
+                            print(f"Enqueue2 failure woof_id={woofId}",flush=True)
                             redis_conn.delete(dedupe_key)
                             raise
             else:
-                print(f"WARNING: Not loading from start of woof for {woof_id}:{startsno}:{limit}",flush=True)
+                print(f"WARNING: Not loading from start of woof for {woofId}:{startsno}:{limit}",flush=True)
     except Exception as e:
         print(f"Exception in run_jobs: {e}",flush=True)
 
