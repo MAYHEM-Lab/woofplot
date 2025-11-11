@@ -211,11 +211,23 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
         ).order_by(WoofData.ts).all()
         retn_len = len(rand_rows) 
         if retn_len == 0:
-            #no results
-            if DEBUG:
-                print(f'\treturning from get_woof_values -- no results found',flush=True)
-            retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
-            return [],200
+            #no results for this date range in DB, load a few of the most recent and try again
+            err = load_woof(wurl) #load the 20 most recent (if delay is too long, change limit)
+            assert err is not None
+            rand_rows = db_session.query(WoofData).filter(  
+                and_(
+                    WoofData.woof_id == woofId,  # Filter by woof_id
+                    WoofData.ts >= startdt,    
+                    WoofData.ts <= enddt
+                ) #).order_by(func.random()).limit(count_to_return).all()
+            ).order_by(WoofData.ts).all()
+            retn_len = len(rand_rows) 
+            if retn_len == 0:
+                if DEBUG:
+                    print(f'\treturning from get_woof_values -- no results found',flush=True)
+                retn = {f"WOOFPLOT": f"get_woof_values nothing returned for woof {woofId}: {start}:{startdt}, {end}:{enddt}"}
+                return [],200
+        #prepare the return package with the results
         first_woof_ts = rand_rows[0].ts
         first_woof_seqno = rand_rows[0].seqno
         last_woof_seqno = rand_rows[-1].seqno
@@ -707,10 +719,11 @@ def load_woof(woofurl,endsn=-1,count=SMALL_JOB): # limit the number loaded (coun
 
         #set startsn and endsn for loading range
         endsn = int(res[5])
-        if latest == -1: #new woof, just back up count and load it to wooflatest
-            startsn = int(endsn - count)
-        else: #existing woof, load from db latest to wooflatest
-            startsn = int(latest)
+        startsn = int(endsn - count)
+        #the following has a tendency to go too far back in time -- woof may have wrapped (e.g. elec_data)
+        #just load the most recent count and then load the rest in the background
+        #if latest != -1: #existing woof, load from db latest to wooflatest, unless its too far back
+        #    startsn = int(latest)
 
         woof.latest_seq_no = endsn #update the database to match wooflatest which we are about to add
         db_session.commit() #commit right away in case there is a race to add data for some reason
