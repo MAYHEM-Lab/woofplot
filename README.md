@@ -130,10 +130,13 @@ rq worker default > ./logs/woofplot-worker2.log 2>&1 &
 python woofplot-server.py >> ./logs/woofplot-server.log 2>&1 &
 ```
 * Navigate to http://YOUR_IPADDRESS:8111 (you can change the port in .env and restart the woofplot server)
-* Be sure to check the logs folder periodically to remove unneeded logs (or setup logrotate to do so)
+* Be sure to check the logs folder (and run clean_queue.py) periodically to remove unneeded logs/jobs -- stop the workers and server when you do so (then restart).
+* Wait a few minutes for the graphs to appear correctly -- if you are restarting a previously started woofplot as it will try to load its missing data upon restart (which can take a while depending on how many woofs you have installed and how long your woofplot was idle/paused).
+
 
 # Terminating WoofPlot
 * Press Ctrl-C on woofplot-server.py if in foreground (else kill its process ID)
 * Use ```kill -9 XXX``` to kill the process IDs (XXX) for redis-server and rq worker
 * Use ```deactivate``` to exit the python virtual environment
+
 
