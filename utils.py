@@ -128,7 +128,7 @@ def call_enqueue_woof_load_jobs(woof_id: int, woofurl: str, cspot_seqno: int):
 
 ################
 def enqueue_woof_load_jobs(woof_id: int, woofurl: str, cspot_seqno: int, *, chunk_size: int = JOB_LIMIT):
-    startsn = cspot_seqno - 9000 #assuming a 10K buffer for most
+    startsn = cspot_seqno - 9800 #assuming a 10K buffer for most
     if startsn < 10:
         startsn = 10
     gaps = find_missing_ranges(woof_id,startsn)
@@ -136,7 +136,8 @@ def enqueue_woof_load_jobs(woof_id: int, woofurl: str, cspot_seqno: int, *, chun
     gaps.sort(key=lambda r: r[1], reverse=True)
     jobs = split_ranges_desc(gaps, chunk_size)
     if DEBUG:
-        print(f"enqueue_woof_load_jobs: checking range {startsn} - {cspot_seqno}, gaps: {len(gaps)}, jobs:{len(jobs)}",flush=True)
+        print(f"enqueue_woof_load_jobs: checking range {startsn} - {cspot_seqno}, gaps: {len(gaps)}, jobs:{len(jobs)}")
+        print(f"\t gaps: {gaps}",flush=True)
 
     enqueued = 0
     for start, end in jobs:

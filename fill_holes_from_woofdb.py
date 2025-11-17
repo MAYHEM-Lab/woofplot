@@ -19,7 +19,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from contextlib import contextmanager
 from sqlalchemy import func, text
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from psycopg2.extras import execute_values
 
 dotenv.load_dotenv()
@@ -108,22 +107,26 @@ def process_woof(db_session, woof, tname, DEBUG=False):
         # changing it to yield rows to reduce peak memory.
         rows_iter = get_woofdb_data(tname, chunk_start, chunk_end)  # yields (seqno, ts, data)
 
-        # Use a short-lived session/connection per window to keep memory flat.
-        with new_session_like(db_session) as s:
-            # Raw psycopg2 connection underneath SQLAlchemy connection
-            conn = s.connection().connection
-            with conn.cursor() as cur:
-                inserted = 0
-                for sub in batched(rows_iter, SUB_BATCH):
-                    # Transform to sequence of tuples matching VALUES %s
-                    values = [(seq, ts, data, woof.id) for (seq, ts, data) in sub]
-                    if not values:
-                        continue
-                    # execute_values constructs a single INSERT ... VALUES (...),(...),... statement
-                    # which is both fast and memory-friendly for medium batches
-                    execute_values(cur, insert_sql, values, page_size=len(values))
-                    inserted += len(values)
-                conn.commit()
+        try:
+            # Use a short-lived session/connection per window to keep memory flat.
+            with new_session_like(db_session) as s:
+                # Raw psycopg2 connection underneath SQLAlchemy connection
+                conn = s.connection().connection
+                with conn.cursor() as cur:
+                    inserted = 0
+                    for sub in batched(rows_iter, SUB_BATCH):
+                        # Transform to sequence of tuples matching VALUES %s
+                        values = [(seq, ts, data, woof.id) for (seq, ts, data) in sub]
+                        if not values:
+                            continue
+                        # execute_values constructs a single INSERT ... VALUES (...),(...),... statement
+                        # which is both fast and memory-friendly for medium batches
+                        execute_values(cur, insert_sql, values, page_size=len(values))
+                        inserted += len(values)
+                    conn.commit()
+        except Exception as e:
+            print(e)
+            print(f"Problem inserting batch seqno chunk: {chunk_start}–{chunk_end}. Skipping...")
 
         if DEBUG:
             print(f'   committed chunk {chunk_start}–{chunk_end}', flush=True)
