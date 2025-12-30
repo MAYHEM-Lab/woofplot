@@ -166,6 +166,8 @@ def main():
         #get the earliest sequence number from woofplot woof.id
         earliest_seqno = db_session.query(func.min(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
         endsno = int(earliest_seqno)
+        if DEBUG:
+            print(f"Earliest seqno for woof_id {woof.id} and table {tname} {endsno}...")
         #get 5 data elements and compute their time difference (sampling rate)
         sample_data = db_session.query(WoofData.ts).filter(WoofData.woof_id == woof.id).order_by(WoofData.ts.desc()).limit(5).all()
         count = diffsum = 0
@@ -184,12 +186,16 @@ def main():
         startsno = endsno - total_samples
         if startsno < 0:
             startsno = measurements_per_day * 3 #start 3 days from sensor instantiation
+        if DEBUG:
+            print(f"orig_startsno: {endsno-total_samples}, startsno: {startsno}, endsno: {endsno}, total_samples: {total_samples}")
 
         #first check if we've already done this (and crashed out due to an error)
         PROCESSIT = True
         snpair = None
         donecount = end = start = 0
         if woof.url in done_dict:
+            if DEBUG:
+                print(f"found woof.url in done dictionary: {woof.url}")
             snpair = done_dict[woof.url]
             PROCESSIT = False
         if snpair is not None:
@@ -200,11 +206,14 @@ def main():
                 .filter(WoofData.woof_id == woof.id)\
                 .filter(WoofData.seqno.between(start, end))\
                 .scalar()
+            if DEBUG:
+                print(f"donecount: {donecount}, end: {end}, start: {start}")
             if donecount < (end-start):
                 PROCESSIT = True
 
         if PROCESSIT:
             print(f'processing {woof.url} donecount: {donecount} vs {end-start}')
+            assert endsno >= startsno
             with open(outfile, "a") as f:
                 f.write(f"{woof.id}:{woof.url}:{tname}:{startsno}:{endsno}\n")
             retn = get_woofdb_data(tname, startsno, endsno) #seqno, dt, data
@@ -214,7 +223,6 @@ def main():
                 print(f'\tadding to woofplot DB; len: {len(retn)}')
                 if len(retn) > 0:
                     print(f'first ele: {retn[0]}')
-            assert endsno >= startsno
             for ele in retn:
                 exists = db_session.query(WoofData).filter_by(woof_id=woof.id, ts=ele[1]).first()
 
