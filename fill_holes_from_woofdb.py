@@ -172,8 +172,8 @@ def get_woofdb_data(tname,startsno,endsno): #returns list of entries to write
     #of the form: ts, seqno, data (colon delimited data)
     if tname == 'wweather':
         return get_wweather(startsno, endsno)
-    elif tname.startswith('wu_'):
-        return get_wu(tname,startsno, endsno)
+    #elif tname.startswith('wu_'): #special handling no longer needed
+        #return get_wu(tname,startsno, endsno)
     else:
         cur = db.get_cursor()
         #seqno, dt, data --> data could be a scalar float (fluxco2) or colon-delimited string (wise_soil3)
@@ -251,32 +251,6 @@ def main():
             continue
 
         process_woof(db_session, woof, tname)
-'''old code
-        #get the earliest sequence number from woofplot woof.id and work forward
-        startsno = db_session.query(func.min(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
-        endsno = db_session.query(func.max(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
-
-        if DEBUG: 
-            print(f'processing {woof.url} startseqno: {startsno} endseqno: {endsno}',flush=True)
-        retn = get_woofdb_data(tname, startsno, endsno) #seqno, dt, data
-        count = 0
-        for ele in retn:
-            exists = db_session.query(WoofData).filter_by(woof_id=woof.id, ts=ele[1]).first()
-            if not exists:
-                if DEBUG: 
-                    print(f'ADDING {ele}')
-                count += 1
-                woofdata = WoofData(
-                    seqno = ele[0],
-                    ts = ele[1],
-                    data = ele[2],
-                    woof=woof
-                )
-                db_session.add(woofdata)
-                db_session.commit()
-                db_session.expunge(woofdata)
-        print(f'Added {count} out of {len(retn)}')
-'''
 
 ######################################
 if __name__ == "__main__":

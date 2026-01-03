@@ -51,6 +51,8 @@ def get_wweather(startsno,endsno): #returns list of entries to write
 
 ######################################
 def get_wu(tname,startsno,endsno): #returns list of entries to write
+    #row: (191580.0, datetime.datetime(2024, 9, 11, 18, 25, 2, 526145), '172.31.31.189', '29.72:5:9:203:78:70:0.0:0.0:79:68:78:0:2024-09-11_18-24-58')
+    #earlier, the final date in the data string needed correcting. This is no longer the case.
     cur = db.get_cursor()
     cur.execute(f"select * from {tname} where seqno >= {startsno} and seqno < {endsno} order by seqno")
     rows = cur.fetchall()
@@ -65,13 +67,14 @@ def get_wu(tname,startsno,endsno): #returns list of entries to write
         retn.append((row[0],row[1],third))
     return retn
 
+
 ######################################
 def get_woofdb_data(tname,startsno,endsno): #returns list of entries to write
     #of the form: ts, seqno, data (colon delimited data)
     if tname == 'wweather':
         return get_wweather(startsno, endsno)
-    elif tname.startswith('wu_'):
-        return get_wu(tname,startsno, endsno)
+    #elif tname.startswith('wu_'): #no need for special handling any more
+        #return get_wu(tname,startsno, endsno)
     else:
         cur = db.get_cursor()
         #seqno, dt, data --> data could be a scalar float (fluxco2) or colon-delimited string (wise_soil3)
@@ -167,7 +170,10 @@ def main():
         earliest_seqno = db_session.query(func.min(WoofData.seqno)).filter(WoofData.woof_id == woof.id).scalar()
         endsno = int(earliest_seqno)
         if DEBUG:
-            print(f"Earliest seqno for woof_id {woof.id} and table {tname} {endsno}...")
+            print(f"Earliest seqno for woof_id {woof.id} and table {tname} is {endsno}...")
+        if endsno < 10: #skip if the eariliest seqno is small (we have the head of the woof)
+            print(f"At head of woof, skipping {tname}...")
+            continue
         #get 5 data elements and compute their time difference (sampling rate)
         sample_data = db_session.query(WoofData.ts).filter(WoofData.woof_id == woof.id).order_by(WoofData.ts.desc()).limit(5).all()
         count = diffsum = 0
