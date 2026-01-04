@@ -302,6 +302,12 @@ def cspot_get(url,seqno=-1):
             FAILED = False 
     except Exception as e:
         exc = e
+    err_string_list = ["ServerRequest", "WooFGet", "failed", "error", "Error", "ERROR"]
+    err_string_bytes = [s.encode('utf-8') for s in err_string_list]
+    if any(substring in val for substring in err_string_bytes):
+        FAILED = True
+    if FAILED and DEBUG:
+        print(f"In cspot_get senspot response in error list or exception {val}", flush=True)
     if FAILED:
         msg = {"WOOFPLOT": f"cspot_get senspot_get failed {exc}"}
         return msg,False
@@ -588,8 +594,11 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
             #create a unique job ID so that we don't keep running this if we've already enqueued it
             latest = None
             res,OK = cspot_get(woofurl)
-            if  OK:
-                latest = int(res[5])
+            if not OK:
+                if DEBUG:
+                    print(f"ERROR in run_jobs -- unable to run jobs in background because cspot_get failed on {woofurl}... we will retry later", flush=True)
+                return
+            latest = int(res[5])
             dedupe_key = f"woofload:dedupe:{woofId}:{latest}:{SMALL_JOB}"
             #returns True if we get the reservation and should enqueue (else None)
             v = redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS)
@@ -682,6 +691,7 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
                 print(f"WARNING: Not loading from start of woof for {woofId}:{startsno}:{limit}",flush=True)
     except Exception as e:
         print(f"Exception in run_jobs: {e}",flush=True)
+        traceback.print_exc()
 
 ################
 def load_woof(woofurl,endsn=-1,count=SMALL_JOB): # limit the number loaded (count) to prevent bg job death/delays
