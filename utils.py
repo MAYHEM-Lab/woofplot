@@ -535,12 +535,21 @@ def add_woof_to_db(woofurl):
 
 ################
 def delete_woof_from_db(id):
+    #the below wasn't working, so just delete the woof
+    woof = db_session.query(Woofs).filter(Woofs.id == id).first()
+    if woof:
+        # Delete the object (this triggers the cascade)
+        db_session.delete(woof)
+        db_session.commit()
+'''
+    woof = db_session.query(Woofs).filter(Woofs.id == id).first()
     #instead of actually deleting the woof, delete the columns for the woof
     #this will cause the frontend to not display the woof as available but won't delete the data
     #woofdata is deleted as part of the retention policy or manually
     woof = db_session.query(Woofs).filter(Woofs.id == id).first()
     woof.columns = []  #this will cause all of the Columns to be deleted because of the cascade option in Woofs for columns attribute
     db_session.commit()
+'''
 
 ################
 def get_all_woofs_from_db():

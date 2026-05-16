@@ -153,7 +153,7 @@ export default class App extends Component {
 
     deleteWoof = (woofId, callback) =>
         fetch(`${api}woof/${woofId}`, {
-            method: 'delete'
+            method: 'DELETE'
         })
             .then(this.handleErrors)
             .then(() => this.fetchWoofs(true).then(() => callback(true)))
