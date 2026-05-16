@@ -22,9 +22,18 @@ db_session = scoped_session(sessionmaker(
     autocommit=False, autoflush=False, bind=engine))
 
 #set seed on DB's random function
-seed_value = float(os.environ.get("INTEGER_SEED_VALUE"))
-scaled_value = math.tanh(seed_value) #convert it to value between -1 and 1
+#seed_value = float(os.environ.get("INTEGER_SEED_VALUE"))
+#scaled_value = math.tanh(seed_value) #convert it to value between -1 and 1
+#db_session.execute(func.setseed(scaled_value))
+# Set seed on DB's random function
+seed_value = float(os.environ.get("INTEGER_SEED_VALUE", 1)) # Added default fallback
+scaled_value = math.tanh(seed_value) # Convert it to value between -1 and 1
+# 1. Execute the function
 db_session.execute(func.setseed(scaled_value))
+# 2. Commit the transaction to close the 'idle in transaction' state
+db_session.commit()
+# 3. Clean up the session so the connection goes back to the pool cleanly
+db_session.remove()
 
 #Everything below happens after the db_session is created, thus can use the db
 import utils
