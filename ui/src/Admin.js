@@ -25,7 +25,10 @@ const CONVERSIONS = {
     'kph2mph': {key: 'kph2mph', value: 'kph2mph', text: 'KPH ⭢ MPH'},
     'mph2kph': {key: 'mph2kph', value: 'mph2kph', text: 'MPH ⭢ KPH'},
     'mps2mph': {key: 'mps2mph', value: 'mps2mph', text: 'm/s ⭢ MPH'},
-    'mph2mps': {key: 'mph2mps', value: 'mph2mps', text: 'MPH ⭢ m/s'}
+    'mph2mps': {key: 'mph2mps', value: 'mph2mps', text: 'MPH ⭢ m/s'},
+    'mm2in': {key: 'mm2in', value: 'mm2in', text: 'mm ⭢ in'},
+    'cm2in': {key: 'cm2in', value: 'cm2in', text: 'cm ⭢ in'},
+    'mbar2hgby1000': {key: 'mbar2hgby1000', value: 'mbar2hgby1000', text: 'mbar ⭢ HG/1000'}
 };
 const NUMERICAL_PLACEHOLDERS = ['n/a']
 

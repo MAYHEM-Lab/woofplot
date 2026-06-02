@@ -496,6 +496,15 @@ def convert(val, conversion):
     elif conversion == "mph2kph":
         kph = floatval * 1.609
         val = f"{kph:.2f}"
+    elif conversion == "mm2in":
+        i = floatval / 25.4
+        val = f"{i:.2f}"
+    elif conversion == "cm2in":
+        i = floatval / 2.54
+        val = f"{i:.2f}"
+    elif conversion == "mbar2hgby1000":
+        hgby1000 = floatval * 0.00002953
+        val = f"{hgby1000:.2f}"
     return val
 
 ################
