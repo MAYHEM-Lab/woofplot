@@ -115,5 +115,7 @@ def cspot_get(woof,senspot_dir=CSPOT_DIR,wprefix=WOOF_PREFIX_DEF,seqno=-1,JUMBOF
     cspot_get(woofname,woofprefix)
     '''
     wf = "{}{}".format(wprefix,woof)
-    return senspot_get(wf,senspot_dir=senspot_dir,seqno=seqno,JUMBOFLAG=JUMBOFLAG)
+    res,code,err = senspot_get(wf,senspot_dir=senspot_dir,seqno=seqno,JUMBOFLAG=JUMBOFLAG)
+    print(f"\tERR: {res}, {code}, {err}",flush=True)
+    return res,code,err
 

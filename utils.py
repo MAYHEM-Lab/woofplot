@@ -136,7 +136,7 @@ def enqueue_woof_load_jobs(woof_id: int, woofurl: str, cspot_seqno: int, *, chun
     gaps.sort(key=lambda r: r[1], reverse=True)
     jobs = split_ranges_desc(gaps, chunk_size)
     if DEBUG:
-        print(f"enqueue_woof_load_jobs: checking range {startsn} - {cspot_seqno}, gaps: {len(gaps)}, jobs:{len(jobs)}")
+        print(f"ENQ1 enqueue_woof_load_jobs: checking range {startsn} - {cspot_seqno}, gaps: {len(gaps)}, jobs:{len(jobs)}")
         print(f"\t gaps: {gaps}",flush=True)
 
     enqueued = 0
@@ -145,7 +145,10 @@ def enqueue_woof_load_jobs(woof_id: int, woofurl: str, cspot_seqno: int, *, chun
         dedupe_key = f"woofload:dedupe:{woof_id}:{start}:{count}"
         # Reserve atomically; skip if already reserved/enqueued/running recently
         if not redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS):
+            print(f"skipping DUPLICATE1 {dedupe_key}")
             continue
+        if DEBUG:
+            print(f"ENQ4: {dedupe_key} {woofurl}, count: {count}")
 
         # Let RQ assign a fresh job_id so we can immediately re-enqueue later
         try:
@@ -197,6 +200,8 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
         print(f'\tcount to return: {count_to_return}',flush=True)
     try:
         wurl = get_woof_url_from_id(woofId)
+        if DEBUG:
+            print(f'\tGWV: {wurl}')
         #err = load_woof(wurl) #load the 20 most recent (if delay is too long, change limit)
         #assert err is not None
 
@@ -295,9 +300,10 @@ def get_woof_values(woofId,field,s,e,agg,interval,raw=None): #between millisecon
 ################
 def cspot_get(url,seqno=-1):
     FAILED = True
-    exc = val = None
+    exc = val = code = err = None
     try:
-        val = cspot_utils.senspot_get(url,seqno=seqno)[0]
+        retn,code,err = cspot_utils.senspot_get(url,seqno=seqno)
+        val = retn
         if val != b'':
             FAILED = False 
     except Exception as e:
@@ -606,6 +612,10 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
         woofurl = wurl
         if wurl == None:
             woofurl = get_woof_url_from_id(woofId)
+        else: 
+            print(f"ERROR in run_jobs -- wurl is None for woofId {woofId}, returning...")
+            return
+
         if DEBUG:
             print(f"run_jobs: setting up background job for {woofurl} {woofId}, limit: {limit}",flush=True)
         if limit == -1: #just call load_woof which loads a small number of the most recent entries
@@ -615,13 +625,14 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
             if not OK:
                 if DEBUG:
                     print(f"ERROR in run_jobs -- unable to run jobs in background because cspot_get failed on {woofurl}... we will retry later", flush=True)
+                    #print(f"\t{err}",flush=True)
                 return
             latest = int(res[5])
             dedupe_key = f"woofload:dedupe:{woofId}:{latest}:{SMALL_JOB}"
             #returns True if we get the reservation and should enqueue (else None)
             v = redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS)
             if DEBUG:
-                print(f"run_jobs2: {woofurl} {woofId}, limit: {limit} latest: {latest}",flush=True)
+                print(f"ENQ2 run_jobs2: {woofurl} {woofId}, limit: {limit} latest count: {SMALL_JOB}",flush=True)
                 print(f"\tdedupe_key: {dedupe_key}")
             # Reserve atomically; skip if already reserved/enqueued/running recently
             if v == True:
@@ -643,13 +654,33 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
                 dedupe_key = f"woofload:enqueue_jobs:dedupe:{woofId}:{latest}"
                 v = redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS)
                 if DEBUG:
-                    print(f"\tsetting up enqueue_jobs with key: {dedupe_key}", flush=True)
+                    print(f"\tENQ3 up enqueue_jobs with key: {dedupe_key} {woofurl} {latest}", flush=True)
                 if v == True:
                     try:
-                        queue.enqueue(tasks.call_enqueue_woof_load_jobs,
+                        job = queue.enqueue(
+                            tasks.call_enqueue_woof_load_jobs,
+                            woofId,
+                            woofurl,
+                            latest,
+                        )
+
+                        print(
+                            f"\tENQUEUED job_id={job.id} "
+                            f"queue={queue.name} "
+                            f"status={job.get_status()} "
+                            f"{woofurl} {latest} dedup_key:{dedupe_key}",
+                            flush=True,
+                        )
+                        job = queue.enqueue_call(
+                            func=tasks.call_enqueue_woof_load_jobs,
                             args=(woofId, woofurl, latest),
                         )
                         #calls enqueue_woof_load_jobs(woofId, woofurl, latest)
+                        print("\tqueued count:", queue.count, flush=True)
+                        print("\tjob exists:", redis_conn.exists(f"rq:job:{job.id}"), flush=True)
+                        print("\tjob status:", job.get_status(refresh=True), flush=True)
+                        if DEBUG:
+                            print(f"\tENQUEUED: {woofurl} {latest} dedup_key:{dedupe_key}", flush=True)
                     except Exception:
                         # If enqueue fails, release reservation so it can be retried
                         print(f"call_enqueue_jobs failure woof_id={woofId}",flush=True)
@@ -669,10 +700,11 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
                     lim = limit
                     while lim > 0: #run multiple jobs with different startsnos
                         dedupe_key = f"woofload:dedupe:{woofId}:{startsno}:{JOB_LIMIT}"
-                        if DEBUG:
-                            print(f"\tdedupe_key: {dedupe_key}")
                         # Reserve atomically; skip if already reserved/enqueued/running recently
-                        if redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS):
+                        v = redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS)
+                        if v == True:
+                            if DEBUG:
+                                print(f"ENQ5: {dedupe_key} {woofurl}, {startsno} {JOB_LIMIT}")
                             try:
                                 queue.enqueue(tasks.woof_load_task, 
                                     args=(woofurl, startsno, JOB_LIMIT), 
@@ -690,10 +722,10 @@ def run_jobs(woofId,limit=JOB_LIMIT,wurl=None):
                         lim = lim - JOB_LIMIT
                 else:
                     dedupe_key = f"woofload:dedupe:{woofId}:{startsno}:{limit}"
-                    if DEBUG:
-                        print(f"\tdedupe_key: {dedupe_key}")
                     # Reserve atomically; skip if already reserved/enqueued/running recently
                     if redis_conn.set(dedupe_key, "1", nx=True, ex=DEDUP_TTL_SECONDS):
+                        if DEBUG:
+                            print(f"ENQ6: {dedupe_key} {woofurl}, {startsno} {JOB_LIMIT}")
                         try:
                             queue.enqueue(tasks.woof_load_task, 
                                 args=(woofurl, startsno, limit), 
