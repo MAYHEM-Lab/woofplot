@@ -64,12 +64,9 @@ class WoofData(Base):
     #relationship back to woof table
     woof = relationship('Woofs', back_populates='woofdata')
     __table_args__ = (
-        # Enforcing uniqueness on the combination of `woof_id` and `field`
-        UniqueConstraint('woof_id', 'ts', name='uix_woof_ts'),
-        # Define an index on the ts column
-        Index('ix_woofdata_ts', 'ts'),  # This creates an index on the ts column
-        # Define an index on the seqno column
-        Index('ix_woofdata_seqno', 'seqno'),  # This creates an index on the ts column
+        UniqueConstraint('woof_id', 'seqno', name='uix_woof_seqno'),
+        Index('ix_woofdata_woof_seqno', 'woof_id', 'seqno'),
+        Index('ix_woofdata_woof_ts', 'woof_id', 'ts'),
     )
     def __repr__(self):
         return f"<WoofData(id={self.id}, woofid={self.woof_id}, ts={self.ts} ({self.ts}), data={self.data}, seqno={self.seqno}>"

@@ -1,53 +1,86 @@
-from datetime import datetime, timedelta
-import utils
+"""
+RQ task wrappers for woofplot.
+
+These functions are intentionally thin. The real logic lives in woof_sync.py so
+it can be called directly from tests and from the API without needing a worker.
+"""
+
+from datetime import datetime
 from rq import get_current_job
-from redis_config import redis_conn
 
-#start redis: redis-server 
-#start workers via python rq worker &
-#place job on queue via: from tasks import woof_load_task; ...job = queue.enqueue(woof_load_task, url, seqno)
+import woof_sync
 
+
+def _job_id() -> str:
+    job = get_current_job()
+    return job.id if job is not None else "direct-call"
+
+
+def load_woof_tail_task(woof_id: int, url: str, latest_seqno: int, count: int = None):
+    job_id = _job_id()
+    print(
+        f"load_woof_tail_task [{job_id}] woof_id={woof_id} latest={latest_seqno} "
+        f"count={count} url={url} at {datetime.now()}",
+        flush=True,
+    )
+    return woof_sync.load_woof_tail(woof_id, url, latest_seqno, count=count)
+
+
+def load_woof_range_task(
+    woof_id: int,
+    url: str,
+    start_seqno: int,
+    end_seqno: int,
+    reason: str = "backfill",
+):
+    job_id = _job_id()
+    print(
+        f"load_woof_range_task [{job_id}] woof_id={woof_id} "
+        f"range={start_seqno}..{end_seqno} reason={reason} url={url} at {datetime.now()}",
+        flush=True,
+    )
+    return woof_sync.load_woof_range(woof_id, url, start_seqno, end_seqno, reason=reason)
+
+
+def plan_backfill_task(woof_id: int, url: str, latest_seqno: int, *, pass_no: int = 1):
+    job_id = _job_id()
+    print(
+        f"plan_backfill_task [{job_id}] woof_id={woof_id} latest={latest_seqno} "
+        f"pass={pass_no} url={url} at {datetime.now()}",
+        flush=True,
+    )
+    return woof_sync.plan_backfill_jobs(woof_id, url, latest_seqno, pass_no=pass_no)
+
+
+# Backward-compatible task names. These let you migrate existing enqueues slowly.
 def woof_load_task(url, seqno, count, *, woof_id=None, latest=None):
-    job = get_current_job()
-    dedupe_key = None
+    if woof_id is None:
+        woof_id = woof_sync.get_woof_id_from_url(url)
     if seqno == -1:
-        assert latest
-        dedupe_key = f"woofload:dedupe:{woof_id}:{latest}:{count}" if woof_id is not None else None
-    else:
-        dedupe_key = f"woofload:dedupe:{woof_id}:{seqno}:{count}" if woof_id is not None else None
-    print(f"woof_load_task [{job.id}] loading {url} start={seqno} count={count} latest={latest} dedupe={dedupe_key} at {datetime.now()}", flush=True)
-        
+        if latest is None:
+            latest = woof_sync.get_latest_seqno_from_remote(url)
+        return load_woof_tail_task(woof_id, url, latest, count)
+    start = int(seqno)
+    end = int(seqno) + int(count) - 1
+    return load_woof_range_task(woof_id, url, start, end, reason="legacy")
 
-    try:
-        # This is the idempotent loader (check for seqno's before requesting/adding)
-        err = utils.load_woof(url, seqno, count)
-        if err is None: 
-            print(f"PROBLEM in background load_woof task: [{job.id}] {url} {seqno} {count}", flush=True)
-        else:
-            pass
-            # success → allow immediate re-enqueue
-            #if dedupe_key:
-                #redis_conn.delete(dedupe_key)
-        print(f"[{job.id}] done {url} at {datetime.now()}", flush=True)
-    except Exception as e:
-        # On failure, keep the dedupe key; the TTL prevents instant duplicate enqueues
-        # (We can also log or move job to a retry queue here.)
-        print(f"[{job.id}] error: {e}", flush=True)
-        raise
 
-#####################
 def call_enqueue_woof_load_jobs(wid, url, seqno):
-    job = get_current_job()
-    dedupe_key = f"woofload:enqueue_jobs:dedupe:{wid}:{seqno}" #in case we want to delete it...
-    print(f"woof_load_task [{job.id}] {url} enqueue_jobs: dedupe={dedupe_key} at {datetime.now()}", flush=True)
-    try:
-        # This is the idempotent loader (check for seqno's before requesting/adding)
-        err = utils.enqueue_woof_load_jobs(wid, url, seqno)
-        if err is None: 
-            print(f"PROBLEM in background enqueue_jobs task: [{job.id}] {url} {seqno}", flush=True)
-        print(f"[{job.id}] done {url} at {datetime.now()}", flush=True)
-    except Exception as e:
-        # On failure, keep the dedupe key; the TTL prevents instant duplicate enqueues
-        # (We can also log or move job to a retry queue here.)
-        print(f"[{job.id}] enqueue_jobs error: {e}", flush=True)
-        raise
+    return plan_backfill_task(wid, url, seqno)
+
+def older_backfill_dispatch_task(woof_id, woofurl):
+    woof_earliest = woof_sync.cspot_get_earliest_seqno(woofurl)
+    if woof_earliest == -1:
+        print(
+            f"older_backfill_dispatch_task failed: no earliest seqno for {woofurl}",
+            flush=True,
+        )
+        return -1
+
+    return woof_sync.enqueue_older_backfill(
+        woof_id,
+        woofurl,
+        woof_earliest,
+        chunk_size=200,
+        max_jobs=10,
+    )

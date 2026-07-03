@@ -84,6 +84,19 @@ def cspot_send(data,woof,senspot_dir=CSPOT_DIR,wprefix=WOOF_PREFIX_DEF,datatype=
     return result,err
 
 #########################
+def senspot_get_earliest_seqno(wf,senspot_dir=CSPOT_DIR):
+    #senspot-get -e -W woof://128.111.45.24:53970/mnt/monitor/cjkpi303-dht
+    '''usage:
+    senspot_get_earliest_seqno(woof)
+    senspot_get_earliest_seqno(woof://128.111.45.24:53970/mnt/monitor/cjkpi303-dht)
+    '''
+    cspotcmd = "{0}/senspot-get".format(senspot_dir)
+    result = ""
+    p = Popen([cspotcmd, '-e', '-W', wf], stdout=PIPE, stderr=PIPE)
+    res,err = p.communicate()
+    return res,p.returncode,err
+
+#########################
 def senspot_get(wf,senspot_dir=CSPOT_DIR,seqno=-1,JUMBOFLAG=False):
     #senspot-get -W woof://128.111.45.24:53970/mnt/monitor/cjkpi303-dht
     '''usage:
