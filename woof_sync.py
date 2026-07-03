@@ -218,7 +218,8 @@ def enqueue_live_load(woof_id: int, url: str, latest_seqno: int, *, count: int =
             result_ttl=3600,
             failure_ttl=86400,
         )
-        log(f"ENQUEUED live job={job.id} woof_id={woof_id} latest={latest_seqno} count={count}")
+        if DEBUG:
+            log(f"ENQUEUED live job={job.id} woof_id={woof_id} latest={latest_seqno} count={count}")
         return job
     except Exception:
         release_reservation(key)
@@ -241,7 +242,8 @@ def enqueue_backfill_plan(woof_id: int, url: str, latest_seqno: int):
             result_ttl=3600,
             failure_ttl=86400,
         )
-        log(f"ENQUEUED dispatch job={job.id} woof_id={woof_id} latest={latest_seqno}")
+        if DEBUG:
+            log(f"ENQUEUED dispatch job={job.id} woof_id={woof_id} latest={latest_seqno}")
         return job
     except Exception:
         release_reservation(key)
@@ -349,10 +351,12 @@ def plan_backfill_jobs(
             enqueued += 1
 
     remaining = max(0, len(ranges) - len(selected))
-    log(
-        f"PLAN_BACKFILL woof_id={woof_id} latest={latest_seqno} "
-        f"gaps={len(gaps)} jobs_total={len(ranges)} enqueued={enqueued} remaining={remaining}"
-    )
+
+    if DEBUG:
+        log(
+            f"PLAN_BACKFILL woof_id={woof_id} latest={latest_seqno} "
+            f"gaps={len(gaps)} jobs_total={len(ranges)} enqueued={enqueued} remaining={remaining}"
+        )
     return {"ok": True, "gaps": len(gaps), "jobs_total": len(ranges), "enqueued": enqueued, "remaining": remaining}
 
 
@@ -435,10 +439,11 @@ def load_woof_range(woof_id: int, url: str, start_seq: int, end_seq: int, *, rea
         woof.latest_seq_no = end_seq
         db_session.commit()
 
-    log(
-        f"LOAD_RANGE done woof_id={woof_id} range={start_seq}..{end_seq} "
-        f"reason={reason} inserted={inserted} skipped={len(already_have)} failed={misses}"
-    )
+    if DEBUG:
+        log(
+            f"LOAD_RANGE done woof_id={woof_id} range={start_seq}..{end_seq} "
+            f"reason={reason} inserted={inserted} skipped={len(already_have)} failed={misses}"
+        )
     return {
         "ok": True,
         "woof_id": woof_id,
