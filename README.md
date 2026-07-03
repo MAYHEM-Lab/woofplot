@@ -3,20 +3,45 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 1. Frontend web interface for plotting time series data and configuring sources from which to extract data
 2. Backend server to keep configured data sources synchronized, extract time series data, and host the frontend
 
-## Fast Start
-* Use the **pre-made docker container** (Ubuntu 24.04), via these [these instructions](https://docs.google.com/document/d/1nIc00qmNRd9zsD2ApW7BYlDljN3qI2IlRiTh67xi3pM).
+## V2 upgrade
+If you are already running woofplot (installed before July 1, 2026) and want to upgrade to the refactored code base, you will need to delete the data cached in the woofplot database woofdata tables -- because we have restructured the tables.  To do that, do the following:
+```
+psql woofplot # then at the database prompt:
+
+TRUNCATE TABLE woofdata RESTART IDENTITY;
+UPDATE woofs SET "latestSeqNo" = -1;
+ALTER TABLE woofdata
+DROP CONSTRAINT IF EXISTS uix_woof_ts;
+ALTER TABLE woofdata
+ADD CONSTRAINT uix_woof_seqno
+UNIQUE (woof_id, seqno);
+CREATE INDEX IF NOT EXISTS ix_woofdata_woof_seqno
+ON woofdata (woof_id, seqno);
+CREATE INDEX IF NOT EXISTS ix_woofdata_woof_ts
+ON woofdata (woof_id, ts);
+
+\q
+
+# Next, flush the rq DB
+redis-cli FLUSHDB
+```
 
 ## Running WoofPlot on Woofs for the First Time
-When you configure WoofPlot to use a new woof and then plot its data for the first time (or after not visualizing its data in awhile), the system will load the data using background threads.  The initial press of the Plot button will return no data (and not display anything).  **Press the Plot button repeatedly** to see the data as it is loaded by the threads.  You can also start by plotting the most recent data first and shorter periods of time (e.g. 6 hours or 1 week versus 1 year) to reduce the latency of this process.
+When you configure WoofPlot to use a new woof and then plot its data for the first time (or after not visualizing its data in awhile), the system will load the data using background threads.  Please be patient as this process completes.  Once it has loaded everything, the system should be more responsive.  If you'd like to expedite this process and have plenty of server resources, you can always add additional workers:
+```
+cd woofplot
+source woofplotenv/bin/activate
+rq worker backfill > ./logs/woofplot-workerXXX.log 2>&1 &  #replace XXX with your extension
+```
 
-## Requirements (for non-docker-container installation)
+## Requirements 
 * [python3 as python](https://www.python.org/downloads/)
 * [yarn](https://classic.yarnpkg.com/en/docs/install)
 * [PostgreSQL](https://www.postgresql.org)
 * * [Configuration and Setup (Centos)](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-postgresql-on-centos-8)
   * [Configuration and Setup (Ubuntu)](https://www.digitalocean.com/community/tutorials/how-to-install-postgresql-on-ubuntu-20-04-quickstart)
 * [redis and python rq](https://python-rq.org)
-* [CSPOT](https://github.com/MAYHEM-Lab/cspot) -- you need only install the CSPOT tools (not docker), e.g. you can use install-ubuntu-nodocker.sh for Ubuntu distros.
+* [CSPOT](https://github.com/MAYHEM-Lab/cspot) -- install the binary distro, e.g. into /home/ubuntu/bin  #you'll need to tell woofplot where this is in the .env file
 
 ## Installation
 ```
@@ -24,8 +49,6 @@ When you configure WoofPlot to use a new woof and then plot its data for the fir
 cd
 git clone git@github.com:MAYHEM-Lab/woofplot.git
 ```
-To use a **pre-made docker container** (Ubuntu 24.04), see [these instructions](https://docs.google.com/document/d/1nIc00qmNRd9zsD2ApW7BYlDljN3qI2IlRiTh67xi3pM).
-
 ### Ubuntu (v20.04 and after) Configuration
 ```
 # Ensure you do not have a firewall blocking port 8111.
@@ -123,8 +146,10 @@ redis-server --daemonize yes --logfile ./logs/woofplot-redis.log
 # Clean out the queues and syart multiple background workers to load data in parallel
 source woofplotenv/bin/activate
 python clean_queue.py
-rq worker default > ./logs/woofplot-worker1.log 2>&1 &
-rq worker default > ./logs/woofplot-worker2.log 2>&1 &
+rq worker live dispatch > ./logs/woofplot-worker1.log 2>&1 &
+rq worker live dispatch > ./logs/woofplot-worker2.log 2>&1 &
+rq worker backfill > ./logs/woofplot-workerbf1.log 2>&1 &
+rq worker backfill > ./logs/woofplot-workerbf2.log 2>&1 &
 
 # Start the server
 python woofplot-server.py >> ./logs/woofplot-server.log 2>&1 &
@@ -133,10 +158,12 @@ python woofplot-server.py >> ./logs/woofplot-server.log 2>&1 &
 * Be sure to check the logs folder (and run clean_queue.py) periodically to remove unneeded logs/jobs -- stop the workers and server when you do so (then restart).
 * Wait a few minutes for the graphs to appear correctly -- if you are restarting a previously started woofplot as it will try to load its missing data upon restart (which can take a while depending on how many woofs you have installed and how long your woofplot was idle/paused).
 
-
 # Terminating WoofPlot
 * Press Ctrl-C on woofplot-server.py if in foreground (else kill its process ID)
-* Use ```kill -9 XXX``` to kill the process IDs (XXX) for redis-server and rq worker
+* pkill -f "rq worker"
+* pkill -f "woofplot-server.py"
 * Use ```deactivate``` to exit the python virtual environment
+* redis-cli shutdown # shutdown redis
+* sudo /etc/init.d/postgresql start  #to shutdown posgresql
 
 
