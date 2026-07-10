@@ -110,9 +110,9 @@ sudo -u postgres createuser --interactive   # username is your login (ubuntu, ce
 # Using psql add a password for this user
 # XXX is the username you just added via createuser (it is your login: ubuntu, centos, cloud-user, ...)
 # YYY is any strong password for the database -- make sure it is single quotes. 
-sudo -u postgres psql postgres
-postgres=# ALTER USER XXX WITH PASSWORD 'YYY';
-postgres=# \q
+sudo -u postgres psql postgres #then at postgres=# prompt:
+ALTER USER XXX WITH PASSWORD 'YYY';
+\q
 
 # Then create the woofplot dB:
 createdb woofplot
