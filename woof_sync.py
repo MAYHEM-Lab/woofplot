@@ -96,7 +96,7 @@ def cspot_get(url: str, seqno: int = -1):
             log(f"cspot_get failed url={url} seqno={seqno} exc={exc} val={val}")
         return {"WOOFPLOT": f"cspot_get failed url={url} seqno={seqno} exc={exc}"}, False
 
-    return val.decode("utf-8").strip().split(" "), True
+    return val.decode("utf-8").strip().split(), True
 
 
 def cspot_get_retry(url: str, seqno: int = -1, retries: int = 1, sleep_s: float = 0.5):
