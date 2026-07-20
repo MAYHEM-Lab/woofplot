@@ -94,7 +94,7 @@ export NVM_DIR="$HOME/.nvm"
 nvm install node
 nvm install 16
 yarn install
-yarn run build  #rerun this if/when you change the UI files
+NODE_OPTIONS=--openssl-legacy-provider yarn run build  #rerun this if/when you change the UI files
 cd ..
 ln -s ui/build .
 ```
