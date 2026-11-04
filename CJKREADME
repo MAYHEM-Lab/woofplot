@@ -1,9 +1,11 @@
 =======================
 files:
 scp woof_table_names.json from alerts-server
+source woofplotenv/bin/activate
 schedule_history.py — Walks the Woofplot woofs table and schedules historical imports. uses:
    history_sync.py — Database import logic, streaming and bulk inserts.
    history_tasks.py — RQ background task.
+python clean_history_q.py #cleans out failed jobs in history queue
 =======================
 set this for the alerts DB: 
 export WOOFDB_DSN="host=alerts-server dbname=woofdb user=YOUR_USER password=YOUR_PASSWORD"
