@@ -4,6 +4,25 @@ Time series extraction, aggregation, and plotting platform. WoofPlot's responsib
 2. Backend server to keep configured data sources synchronized, extract time series data, and host the frontend
 
 ## V2 upgrade
+If you are already running woofplot and have upgraded/installed after the July 1, 2026 v2 release, add this to your woofplotenv to use the new tools.
+```
+cd woofplot
+./stop-woofplot.sh
+git pull
+
+#add an index to the database
+psql woofplot
+   woofplot=# CREATE UNIQUE INDEX CONCURRENTLY uix_woof_ts ON woofdata (woof_id, ts);
+   woofplot=# ALTER TABLE woofdata DROP CONSTRAINT uix_woof_seqno;
+   woofplot=# \q
+
+source woofplotenv/bin/activate
+pip install --upgrade pip
+pip install python-dateutil
+deactivate
+./RESTART.sh
+```
+### Updating Earlier Versions
 If you are already running woofplot (installed before July 1, 2026) and want to upgrade to the refactored code base, you will need to delete the data cached in the woofplot database woofdata tables -- because we have restructured the tables.  To do that, do the following:
 ```
 psql woofplot # then at the database prompt:
@@ -80,7 +99,8 @@ cd ~/woofplot
 python -m venv woofplotenv
 source woofplotenv/bin/activate
 pip install --upgrade pip
-pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2-binary sqlalchemy_orm pytz python-dotenv requests
+pip install sqlalchemy-utils psycopg python-dotenv flask flask-jwt-extended passlib rq flask_cors psycopg2-binary sqlalchemy_orm pytz python-dotenv requests python-dateutil
+
 #if you are using an older distro -- you need to upgrade flask:
 pip install --upgrade Flask
 deactivate
