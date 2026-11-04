@@ -1,1 +1,17 @@
-senspot-get -W woof://169.231.230.76/sharedfs/unl-data/windspeed-signal
+=======================
+files:
+scp woof_table_names.json from alerts-server
+schedule_history.py — Walks the Woofplot woofs table and schedules historical imports. uses:
+   history_sync.py — Database import logic, streaming and bulk inserts.
+   history_tasks.py — RQ background task.
+=======================
+set this for the alerts DB: 
+export WOOFDB_DSN="host=alerts-server dbname=woofdb user=YOUR_USER password=YOUR_PASSWORD"
+export SQLALCHEMY_DATABASE_URI="postgresql://ubuntu:PWD@localhost:5432/woofplot"
+./woofplotenv/bin/python schedule_history.py \
+    --mapping woof_table_names.json \
+    --years 1 \
+    --dry-run
+
+#remove --dry-run when ready, wu*_ota* woofs are skipped because they don't have serialized data columns
+
